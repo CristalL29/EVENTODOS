@@ -1,11 +1,72 @@
 import { useState } from 'react'
 import './App.css'
+import { EventCard, EventCatalog, EventDetails } from './EventViews.jsx'
 
 const initialEvents = [
-  { id: 1, name: 'Festival Brisa', category: 'MÚSICA · FESTIVAL', date: '2026-10-24', time: '16:00', venue: 'Parque Bicentenario', city: 'Santiago', price: 18900, sold: 842, tone: 'coral', mark: 'BRISA' },
-  { id: 2, name: 'Noche de jazz', category: 'MÚSICA · EN VIVO', date: '2026-10-18', time: '20:30', venue: 'Club Subterráneo', city: 'Providencia', price: 12500, sold: 514, tone: 'plum', mark: 'JAZZ' },
-  { id: 3, name: 'Mercado creativo', category: 'FERIA · DISEÑO', date: '2026-10-20', time: '11:00', venue: 'Centro Cultural La Moneda', city: 'Santiago', price: 5000, sold: 367, tone: 'yellow', mark: 'CREA' },
-  { id: 4, name: 'Comedia sin filtro', category: 'TEATRO · STAND UP', date: '2026-10-29', time: '21:00', venue: 'Teatro Mori', city: 'Reñaca', price: 9900, sold: 298, tone: 'blue', mark: 'RÍE' },
+  {
+    id: 1, name: 'Festival Brisa', category: 'MÚSICA · FESTIVAL', filterCategory: 'Música', date: '2026-10-24', time: '16:00', venue: 'Parque Bicentenario', city: 'Santiago', address: 'Acceso por avenida Bicentenario, entrada norte', organizer: 'Colectivo Brisa', price: 18900, sold: 842, tone: 'coral', mark: 'BRISA',
+    description: 'Una tarde al aire libre para descubrir nuevas voces, bailar junto al lago y compartir música en comunidad. La programación reúne proyectos independientes y artistas invitados en dos escenarios.',
+    organizerDescription: 'Colectivo local dedicado a producir encuentros musicales accesibles y apoyar a artistas emergentes.',
+    contact: { email: 'hola@colectivobrisa.example', phone: '+56 9 0000 0001' },
+    attendance: ['Apertura de puertas a las 15:00.', 'Menores de 16 años deben asistir con una persona adulta.', 'Recinto al aire libre; revisa el pronóstico antes de asistir.', 'No se permite ingresar con alimentos ni bebidas externas.'],
+    images: [
+      { src: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=1400&q=85', alt: 'Público frente a un escenario durante un concierto' },
+      { src: 'https://images.unsplash.com/photo-1501386761578-eac5ce94b9b5?auto=format&fit=crop&w=900&q=80', alt: 'Asistentes disfrutando un festival al aire libre' },
+      { src: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=900&q=80', alt: 'Luces de escenario en un festival musical' },
+    ],
+    tickets: [
+      { id: 'general', name: 'General', price: 18900, description: 'Acceso a escenarios y zonas comunes.' },
+      { id: 'preferente', name: 'Preferente', price: 32900, description: 'Acceso preferente y zona de descanso.' },
+    ],
+  },
+  {
+    id: 2, name: 'Noche de jazz', category: 'MÚSICA · EN VIVO', filterCategory: 'Música', date: '2026-10-18', time: '20:30', venue: 'Club Subterráneo', city: 'Providencia', address: 'Sala principal, acceso por calle Orrego Luco', organizer: 'Club Subterráneo', price: 12500, sold: 514, tone: 'plum', mark: 'JAZZ',
+    description: 'Una sesión íntima de jazz en vivo con repertorio original, improvisación y una banda invitada. La noche abre con un set acústico y continúa con una presentación principal.',
+    organizerDescription: 'Espacio cultural independiente que presenta música en vivo y artistas de la escena local.',
+    contact: { email: 'programacion@subterraneo.example', phone: '+56 9 0000 0002' },
+    attendance: ['Apertura de puertas a las 19:45.', 'Evento para mayores de 18 años.', 'El acceso al recinto tiene escaleras.', 'Asientos disponibles por orden de llegada.'],
+    images: [
+      { src: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?auto=format&fit=crop&w=1400&q=85', alt: 'Músicos tocando jazz en un escenario pequeño' },
+      { src: 'https://images.unsplash.com/photo-1415201364774-f6f0bb35f28f?auto=format&fit=crop&w=900&q=80', alt: 'Instrumentos preparados para una sesión de jazz' },
+      { src: 'https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=900&q=80', alt: 'Cantante en una presentación musical' },
+    ],
+    tickets: [
+      { id: 'general', name: 'General', price: 12500, description: 'Acceso a la presentación.' },
+      { id: 'mesa', name: 'Mesa compartida', price: 18500, description: 'Asiento en mesa compartida, sujeto a disponibilidad.' },
+    ],
+  },
+  {
+    id: 3, name: 'Mercado creativo', category: 'FERIA · DISEÑO', filterCategory: 'Ferias', date: '2026-10-20', time: '11:00', venue: 'Centro Cultural La Moneda', city: 'Santiago', address: 'Plaza de la Ciudadanía, nivel -3', organizer: 'Taller Nube', price: 5000, sold: 367, tone: 'yellow', mark: 'CREA',
+    description: 'Un recorrido por proyectos independientes de ilustración, cerámica, objetos y diseño. Conversa con quienes crean cada pieza y participa en talleres breves durante la jornada.',
+    organizerDescription: 'Taller Nube conecta a creadoras, oficios y comunidades en encuentros abiertos.',
+    contact: { email: 'equipo@tallernube.example', phone: '+56 9 0000 0003' },
+    attendance: ['Feria abierta entre 11:00 y 19:00.', 'La entrada permite un acceso durante el día.', 'Espacio accesible mediante ascensores del centro cultural.', 'Talleres con cupos limitados se inscriben en el recinto.'],
+    images: [
+      { src: 'https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=1400&q=85', alt: 'Mesa de trabajo en un taller de arte y diseño' },
+      { src: 'https://images.unsplash.com/photo-1493106641515-6b5631de4bb9?auto=format&fit=crop&w=900&q=80', alt: 'Objetos de diseño y arte hechos a mano' },
+      { src: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=900&q=80', alt: 'Materiales y obras en un espacio creativo' },
+    ],
+    tickets: [
+      { id: 'general', name: 'Entrada general', price: 5000, description: 'Acceso a la feria durante el día.' },
+      { id: 'taller', name: 'Entrada + taller', price: 9500, description: 'Acceso a la feria y a un taller de 45 minutos.' },
+    ],
+  },
+  {
+    id: 4, name: 'Comedia sin filtro', category: 'TEATRO · STAND UP', filterCategory: 'Teatro', date: '2026-10-29', time: '21:00', venue: 'Teatro Mori', city: 'Reñaca', address: 'Sala principal, avenida Borgoño 14.500', organizer: 'Ríe Producciones', price: 9900, sold: 298, tone: 'blue', mark: 'RÍE',
+    description: 'Una noche de stand up con rutinas nuevas, invitados sorpresa y humor cotidiano. Presentación en formato de sala con una pausa breve entre bloques.',
+    organizerDescription: 'Ríe Producciones crea y presenta espectáculos de comedia en espacios independientes.',
+    contact: { email: 'hola@rieproducciones.example', phone: '+56 9 0000 0004' },
+    attendance: ['Apertura de puertas a las 20:15.', 'Espectáculo recomendado para mayores de 16 años.', 'No se permite grabar la presentación.', 'Llegar después del inicio puede implicar esperar una pausa para ingresar.'],
+    images: [
+      { src: 'https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=1400&q=85', alt: 'Escenario preparado para una presentación de comedia' },
+      { src: 'https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?auto=format&fit=crop&w=900&q=80', alt: 'Público reunido en una presentación en vivo' },
+      { src: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=900&q=80', alt: 'Luces encendidas en un escenario' },
+    ],
+    tickets: [
+      { id: 'general', name: 'General', price: 9900, description: 'Asiento general en sala.' },
+      { id: 'fila-preferente', name: 'Fila preferente', price: 14900, description: 'Asiento en las primeras filas.' },
+    ],
+  },
 ]
 
 const initialRaffles = [
@@ -29,6 +90,12 @@ function App() {
   const [role, setRole] = useState('Comprador')
   const [sortOrder, setSortOrder] = useState('asc')
   const [events] = useState(initialEvents)
+  const [eventSearch, setEventSearch] = useState('')
+  const [eventDateFilter, setEventDateFilter] = useState('all')
+  const [eventCategoryFilter, setEventCategoryFilter] = useState('all')
+  const [eventLocationFilter, setEventLocationFilter] = useState('all')
+  const [selectedEventId, setSelectedEventId] = useState(null)
+  const [eventLoadStatus, setEventLoadStatus] = useState('ready')
   const [raffles, setRaffles] = useState(initialRaffles)
   const [notices, setNotices] = useState(initialNotices)
   const [showRaffleForm, setShowRaffleForm] = useState(false)
@@ -37,6 +104,18 @@ function App() {
   const [rafflePrice, setRafflePrice] = useState('')
 
   const sortedEvents = [...events].sort((a, b) => (sortOrder === 'asc' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)))
+  const filteredEvents = sortedEvents.filter((event) => {
+    const searchText = `${event.name} ${event.description} ${event.venue} ${event.city}`.toLocaleLowerCase('es-CL')
+    const matchesSearch = searchText.includes(eventSearch.trim().toLocaleLowerCase('es-CL'))
+    const matchesCategory = eventCategoryFilter === 'all' || event.filterCategory === eventCategoryFilter
+    const matchesLocation = eventLocationFilter === 'all' || event.city === eventLocationFilter
+    const matchesDate = eventDateFilter === 'all'
+      || (eventDateFilter === 'weekend' && event.date >= '2026-10-17' && event.date <= '2026-10-18')
+      || (eventDateFilter === 'month' && event.date.startsWith('2026-10'))
+    return matchesSearch && matchesCategory && matchesLocation && matchesDate
+  })
+  const selectedEvent = events.find((event) => event.id === selectedEventId)
+  const eventLocations = [...new Set(events.map((event) => event.city))].sort((a, b) => a.localeCompare(b, 'es-CL'))
   const popularRaffles = [...raffles].filter((raffle) => raffle.status === 'Pública').sort((a, b) => b.sold - a.sold)
   const unreadCount = notices.filter((notice) => notice.unread).length
 
@@ -61,6 +140,23 @@ function App() {
     showMessage(`¡Listo! Agregaste ${name} a tus entradas.`)
   }
 
+  function openEventCatalog() {
+    setSelectedEventId(null)
+    setActiveTab('Eventos')
+    setEventLoadStatus('loading')
+    window.setTimeout(() => setEventLoadStatus(events.length ? 'ready' : 'error'), 240)
+  }
+
+  function openEventDetails(event) {
+    setSelectedEventId(event.id)
+    setActiveTab('Eventos')
+  }
+
+  function retryEventLoad() {
+    setEventLoadStatus('loading')
+    window.setTimeout(() => setEventLoadStatus(events.length ? 'ready' : 'error'), 240)
+  }
+
   function markNoticesRead() {
     setNotices((current) => current.map((notice) => ({ ...notice, unread: false })))
   }
@@ -74,7 +170,7 @@ function App() {
         </a>
         <nav className="main-nav" aria-label="Navegación principal">
           {tabs.map((tab) => (
-            <button key={tab} type="button" className={`nav-link ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
+            <button key={tab} type="button" className={`nav-link ${activeTab === tab ? 'active' : ''}`} onClick={() => tab === 'Eventos' ? openEventCatalog() : setActiveTab(tab)}>
               {tab}{tab === 'Avisos' && unreadCount > 0 && <span className="nav-count">{unreadCount}</span>}
             </button>
           ))}
@@ -96,13 +192,13 @@ function App() {
               <div className="hero-art" aria-label="Ilustración de escenario de música" role="img"><span className="sun-disc"/><span className="stage-light light-one"/><span className="stage-light light-two"/><span className="stage-floor"/><span className="hero-caption">VIVE<br />EL MOMENTO</span><span className="hero-index">01 — 04</span></div>
             </section>
             <section className="quick-search" aria-label="Buscar eventos">
-              <label><span>¿Qué te gustaría vivir?</span><input aria-label="Buscar por evento, artista o lugar" placeholder="Evento, artista o lugar" onKeyDown={(event) => event.key === 'Enter' && setActiveTab('Eventos')} /></label>
-              <label className="date-field"><span>¿Cuándo?</span><select aria-label="Filtrar por fecha"><option>Cualquier fecha</option><option>Este fin de semana</option><option>Este mes</option></select></label>
-              <button className="button button-dark" type="button" onClick={() => setActiveTab('Eventos')}>Explorar eventos <span aria-hidden="true">↗</span></button>
+              <label><span>¿Qué te gustaría vivir?</span><input aria-label="Buscar por evento, artista o lugar" placeholder="Evento, artista o lugar" value={eventSearch} onChange={(event) => setEventSearch(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && openEventCatalog()} /></label>
+              <label className="date-field"><span>¿Cuándo?</span><select aria-label="Filtrar por fecha" value={eventDateFilter} onChange={(event) => setEventDateFilter(event.target.value)}><option value="all">Cualquier fecha</option><option value="weekend">Este fin de semana</option><option value="month">Este mes</option></select></label>
+              <button className="button button-dark" type="button" onClick={openEventCatalog}>Explorar eventos <span aria-hidden="true">↗</span></button>
             </section>
             <section className="section-block">
-              <div className="section-heading"><div><p className="eyebrow">NO TE LO PIERDAS</p><h2>Populares <span>&</span> próximos</h2></div><button className="text-action" onClick={() => setActiveTab('Eventos')} type="button">Ver todos <span aria-hidden="true">↗</span></button></div>
-              <div className="event-grid">{sortedEvents.slice(0, 3).map((event) => <EventCard key={event.id} event={event} onBuy={buyTicket} />)}</div>
+              <div className="section-heading"><div><p className="eyebrow">NO TE LO PIERDAS</p><h2>Populares <span>&</span> próximos</h2></div><button className="text-action" onClick={openEventCatalog} type="button">Ver todos <span aria-hidden="true">↗</span></button></div>
+              <div className="event-grid">{sortedEvents.slice(0, 3).map((event) => <EventCard key={event.id} event={event} onView={openEventDetails} />)}</div>
             </section>
             <section className="raffle-strip">
               <div className="raffle-copy"><p className="eyebrow">SUERTE CON PROPÓSITO</p><h2>Una oportunidad,<br /><em>muchas posibilidades.</em></h2><p>Participa en rifas creadas por comunidades que hacen cosas increíbles.</p><button className="button button-light" type="button" onClick={() => setActiveTab('Rifas')}>Explorar rifas <span aria-hidden="true">↗</span></button></div>
@@ -112,7 +208,25 @@ function App() {
           </>
         )}
 
-        {activeTab === 'Eventos' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">ENCUENTRA TU PRÓXIMO PLAN</p><h1>Todos los eventos</h1><p>Experiencias para recordar, cerca de ti.</p></div><label className="sort-control">Ordenar por fecha<select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} aria-label="Ordenar eventos por fecha"><option value="asc">Más próximos primero</option><option value="desc">Más lejanos primero</option></select></label></div><div className="filter-row"><button type="button" className="filter-chip active">Todos</button><button type="button" className="filter-chip" onClick={() => showMessage('Filtro Música seleccionado.')}>Música</button><button type="button" className="filter-chip" onClick={() => showMessage('Filtro Ferias seleccionado.')}>Ferias</button><button type="button" className="filter-chip" onClick={() => showMessage('Filtro Teatro seleccionado.')}>Teatro</button><span className="result-count">{sortedEvents.length} eventos</span></div><div className="event-grid events-list">{sortedEvents.map((event) => <EventCard key={event.id} event={event} onBuy={buyTicket} />)}</div></section>}
+        {activeTab === 'Eventos' && (selectedEvent
+          ? <EventDetails key={selectedEvent.id} event={selectedEvent} onBack={openEventCatalog} />
+          : <EventCatalog
+            events={filteredEvents}
+            locations={eventLocations}
+            search={eventSearch}
+            onSearchChange={setEventSearch}
+            dateFilter={eventDateFilter}
+            onDateFilterChange={setEventDateFilter}
+            categoryFilter={eventCategoryFilter}
+            onCategoryFilterChange={setEventCategoryFilter}
+            locationFilter={eventLocationFilter}
+            onLocationFilterChange={setEventLocationFilter}
+            sortOrder={sortOrder}
+            onSortChange={setSortOrder}
+            status={eventLoadStatus}
+            onRetry={retryEventLoad}
+            onView={openEventDetails}
+          />)}
 
         {activeTab === 'Rifas' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">PARTICIPA, COMPARTE, GANA</p><h1>Rifas con propósito</h1><p>Oportunidades que impulsan grandes causas.</p></div>{role === 'Organizador' && <button className="button button-dark" type="button" onClick={() => setShowRaffleForm(true)}>＋ Crear rifa</button>}</div><div className="raffle-callout"><span className="callout-symbol">✳</span><div><strong>Tu participación hace la diferencia.</strong><p>Cada boleto apoya a una comunidad o proyecto local.</p></div><span className="callout-count">{popularRaffles.length} activas</span></div><div className="raffle-list">{raffles.filter((raffle) => role === 'Organizador' || raffle.status === 'Pública').sort((a, b) => b.sold - a.sold).map((raffle) => <RaffleRow key={raffle.id} raffle={raffle} onJoin={() => buyTicket(raffle.name)} isOrganizer={role === 'Organizador'} />)}</div></section>}
 
@@ -127,10 +241,6 @@ function App() {
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   )
-}
-
-function EventCard({ event, onBuy }) {
-  return <article className="event-card"><div className={`event-art ${event.tone}`}><span className="art-orbit"/><span className="art-mark">{event.mark}</span><span className="event-date"><strong>{formatDate(event.date).split(' ')[0]}</strong><small>{formatDate(event.date).split(' ')[1]}</small></span><span className="art-lines"/></div><div className="event-card-body"><p className="eyebrow">{event.category}</p><h3>{event.name}</h3><p className="event-venue">{event.venue} · {event.city}</p><div className="event-card-foot"><div><span>{event.time} h</span><strong>Desde {formatPrice(event.price)}</strong></div><button className="round-action" type="button" aria-label={`Comprar entradas para ${event.name}`} onClick={() => onBuy(event.name)}>↗</button></div></div></article>
 }
 
 function RaffleRow({ raffle, onJoin, isOrganizer }) {
