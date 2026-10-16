@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import { EventCard, EventCatalog, EventDetails } from './EventViews.jsx'
 
@@ -84,12 +84,22 @@ const initialNotices = [
 const tabs = ['Inicio', 'Eventos', 'Rifas', 'Avisos', 'Perfil']
 const formatPrice = (amount) => `$${amount.toLocaleString('es-CL')}`
 const formatDate = (value) => new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`))
+const todayDate = new Date().toISOString().slice(0, 10)
+const emptyEventForm = { name: '', description: '', date: '', time: '', venue: '', image: '' }
+const eventStorageKey = 'eventodos-events'
 
 function App() {
   const [activeTab, setActiveTab] = useState('Inicio')
   const [role, setRole] = useState('Comprador')
   const [sortOrder, setSortOrder] = useState('asc')
-  const [events] = useState(initialEvents)
+  const [events, setEvents] = useState(() => {
+    try {
+      const savedEvents = JSON.parse(window.localStorage.getItem(eventStorageKey))
+      return Array.isArray(savedEvents) ? savedEvents : initialEvents
+    } catch {
+      return initialEvents
+    }
+  })
   const [eventSearch, setEventSearch] = useState('')
   const [eventDateFilter, setEventDateFilter] = useState('all')
   const [eventCategoryFilter, setEventCategoryFilter] = useState('all')
@@ -99,11 +109,16 @@ function App() {
   const [raffles, setRaffles] = useState(initialRaffles)
   const [notices, setNotices] = useState(initialNotices)
   const [showRaffleForm, setShowRaffleForm] = useState(false)
+  const [showEventForm, setShowEventForm] = useState(false)
+  const [editingEventId, setEditingEventId] = useState(null)
+  const [eventForm, setEventForm] = useState(emptyEventForm)
   const [toast, setToast] = useState('')
   const [raffleName, setRaffleName] = useState('')
   const [rafflePrice, setRafflePrice] = useState('')
 
-  const sortedEvents = [...events].sort((a, b) => (sortOrder === 'asc' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)))
+  const publicEvents = events.filter((event) => event.status !== 'Borrador')
+  const organizerEvents = events.filter((event) => event.owner === 'current-organizer')
+  const sortedEvents = [...publicEvents].sort((a, b) => (sortOrder === 'asc' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)))
   const filteredEvents = sortedEvents.filter((event) => {
     const searchText = `${event.name} ${event.description} ${event.venue} ${event.city}`.toLocaleLowerCase('es-CL')
     const matchesSearch = searchText.includes(eventSearch.trim().toLocaleLowerCase('es-CL'))
@@ -114,10 +129,14 @@ function App() {
       || (eventDateFilter === 'month' && event.date.startsWith('2026-10'))
     return matchesSearch && matchesCategory && matchesLocation && matchesDate
   })
-  const selectedEvent = events.find((event) => event.id === selectedEventId)
-  const eventLocations = [...new Set(events.map((event) => event.city))].sort((a, b) => a.localeCompare(b, 'es-CL'))
+  const selectedEvent = publicEvents.find((event) => event.id === selectedEventId)
+  const eventLocations = [...new Set(publicEvents.map((event) => event.city))].sort((a, b) => a.localeCompare(b, 'es-CL'))
   const popularRaffles = [...raffles].filter((raffle) => raffle.status === 'Pública').sort((a, b) => b.sold - a.sold)
   const unreadCount = notices.filter((notice) => notice.unread).length
+
+  useEffect(() => {
+    window.localStorage.setItem(eventStorageKey, JSON.stringify(events))
+  }, [events])
 
   function showMessage(message) {
     setToast(message)
@@ -136,6 +155,76 @@ function App() {
     showMessage(status === 'Pública' ? 'Rifa publicada correctamente.' : 'Borrador guardado.')
   }
 
+  function openEventForm(eventToEdit = null) {
+    setEditingEventId(eventToEdit?.id ?? null)
+    setEventForm(eventToEdit ? {
+      name: eventToEdit.name,
+      description: eventToEdit.description,
+      date: eventToEdit.date,
+      time: eventToEdit.time,
+      venue: eventToEdit.venue,
+      image: eventToEdit.images?.[0]?.src ?? '',
+    } : emptyEventForm)
+    setShowEventForm(true)
+  }
+
+  function saveEvent(status) {
+    const { name, description, date, time, venue, image } = eventForm
+    if (![name, description, date, time, venue].every((value) => value.trim())) {
+      showMessage('Completa el nombre, la descripción, la fecha, la hora y el lugar.')
+      return
+    }
+
+    const previousEvent = events.find((event) => event.id === editingEventId)
+    const updatedEvent = {
+      ...previousEvent,
+      id: editingEventId ?? Date.now(),
+      owner: 'current-organizer',
+      name: name.trim(),
+      description: description.trim(),
+      date,
+      time,
+      venue: venue.trim(),
+      city: venue.trim(),
+      address: venue.trim(),
+      organizer: 'Tu organización',
+      category: 'EVENTO · COMUNIDAD',
+      filterCategory: 'Otros',
+      tone: 'coral',
+      mark: name.trim().slice(0, 8).toUpperCase(),
+      price: 0,
+      sold: 0,
+      status,
+      images: image ? [{ src: image, alt: `Imagen de ${name.trim()}` }] : [],
+      tickets: previousEvent?.tickets ?? [],
+      attendance: previousEvent?.attendance ?? [],
+    }
+
+    setEvents((current) => editingEventId
+      ? current.map((event) => event.id === editingEventId ? updatedEvent : event)
+      : [updatedEvent, ...current])
+    setShowEventForm(false)
+    setEventForm(emptyEventForm)
+    showMessage(status === 'Pública'
+      ? (editingEventId ? 'Evento actualizado y publicado.' : 'Evento publicado correctamente.')
+      : (editingEventId ? 'Borrador actualizado.' : 'Borrador guardado.'))
+  }
+
+  function selectEventImage(file) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      showMessage('Selecciona un archivo de imagen válido.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showMessage('La imagen debe pesar menos de 2 MB.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => setEventForm((current) => ({ ...current, image: reader.result }))
+    reader.readAsDataURL(file)
+  }
+
   function buyTicket(name) {
     showMessage(`¡Listo! Agregaste ${name} a tus entradas.`)
   }
@@ -144,7 +233,7 @@ function App() {
     setSelectedEventId(null)
     setActiveTab('Eventos')
     setEventLoadStatus('loading')
-    window.setTimeout(() => setEventLoadStatus(events.length ? 'ready' : 'error'), 240)
+    window.setTimeout(() => setEventLoadStatus(publicEvents.length ? 'ready' : 'error'), 240)
   }
 
   function openEventDetails(event) {
@@ -154,7 +243,7 @@ function App() {
 
   function retryEventLoad() {
     setEventLoadStatus('loading')
-    window.setTimeout(() => setEventLoadStatus(events.length ? 'ready' : 'error'), 240)
+    window.setTimeout(() => setEventLoadStatus(publicEvents.length ? 'ready' : 'error'), 240)
   }
 
   function markNoticesRead() {
@@ -233,11 +322,14 @@ function App() {
         {activeTab === 'Avisos' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">NOVEDADES DE TUS PLANES</p><h1>Avisos</h1><p>Cambios e información de tus entradas y eventos.</p></div>{unreadCount > 0 && <button className="text-action" type="button" onClick={markNoticesRead}>Marcar todo como leído</button>}</div><div className="notice-list">{notices.map((notice) => <NoticeItem key={notice.id} notice={notice} />)}</div></section>}
 
         {activeTab === 'Perfil' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">TU ESPACIO EN EVENTODOS</p><h1>{role === 'Comprador' ? 'Hola, Camila.' : 'Panel de organización'}</h1><p>{role === 'Comprador' ? 'Aquí comienza tu próxima historia.' : 'Administra tus eventos y conecta con tu comunidad.'}</p></div><div className="role-switch profile-role"><button className={role === 'Comprador' ? 'selected' : ''} onClick={() => setRole('Comprador')} type="button">Comprador</button><button className={role === 'Organizador' ? 'selected' : ''} onClick={() => setRole('Organizador')} type="button">Organizador</button></div></div>{role === 'Comprador' ? <div className="profile-layout"><div className="profile-stat"><span>ENTRADAS ACTIVAS</span><strong>2</strong><button type="button" className="text-action" onClick={() => showMessage('Tus entradas están al día.')}>Ver mis entradas ↗</button></div><div className="profile-stat"><span>RIFAS EN LAS QUE PARTICIPAS</span><strong>1</strong><button type="button" className="text-action" onClick={() => setActiveTab('Rifas')}>Explorar rifas ↗</button></div><div className="profile-detail"><p className="eyebrow">DATOS DE LA CUENTA</p><h2>Camila Morales</h2><p>camila.morales@email.com</p><button className="button button-outline" type="button" onClick={() => showMessage('Pronto podrás editar tus datos.')}>Editar perfil</button></div></div> : <><div className="organizer-stats"><div><span>RIFAS PUBLICADAS</span><strong>{raffles.filter((raffle) => raffle.status === 'Pública').length}</strong></div><div><span>BOLETOS VENDIDOS</span><strong>{raffles.reduce((total, raffle) => total + raffle.sold, 0).toLocaleString('es-CL')}</strong></div><div><span>BORRADORES</span><strong>{raffles.filter((raffle) => raffle.status === 'Borrador').length}</strong></div><button className="button button-dark" type="button" onClick={() => setShowRaffleForm(true)}>＋ Crear rifa</button></div><div className="organizer-table"><div className="table-heading"><div><p className="eyebrow">TU ACTIVIDAD</p><h2>Rifas y publicaciones</h2></div><button className="text-action" type="button" onClick={() => setActiveTab('Rifas')}>Ver todas ↗</button></div>{raffles.map((raffle) => <RaffleRow key={raffle.id} raffle={raffle} onJoin={() => {}} isOrganizer />)}</div></>}</section>}
+
+        {activeTab === 'Perfil' && role === 'Organizador' && <section className="organizer-events-section"><div className="table-heading"><div><p className="eyebrow">PUBLICACIONES DE EVENTOS</p><h2>Mis eventos</h2></div><button className="button button-dark" type="button" onClick={() => openEventForm()}>＋ Crear evento</button></div><div className="organizer-event-stats"><span>{organizerEvents.filter((event) => event.status === 'Pública').length} publicados</span><span>{organizerEvents.filter((event) => event.status === 'Borrador').length} borradores</span></div>{organizerEvents.length ? <div className="organizer-event-list">{organizerEvents.map((event) => <article className="organizer-event-row" key={event.id}>{event.images?.[0]?.src ? <img src={event.images[0].src} alt="" /> : <div className="organizer-event-placeholder" aria-hidden="true">{event.mark}</div>}<div className="organizer-event-copy"><div className="organizer-event-title"><h3>{event.name}</h3><span className={`status-label ${event.status === 'Pública' ? 'is-public' : 'is-draft'}`}>{event.status}</span></div><p>{formatDate(event.date)} · {event.time} · {event.venue}</p><p className="organizer-event-description">{event.description}</p></div><button className="button button-outline" type="button" onClick={() => openEventForm(event)}>Editar</button></article>)}</div> : <p className="organizer-events-empty">Aún no tienes eventos. Crea uno y guárdalo como borrador o publícalo para que aparezca en la agenda.</p>}</section>}
       </main>
 
       <footer className="footer"><a className="brand" href="#inicio" onClick={() => setActiveTab('Inicio')}><img className="brand-mark" src="/favicon.svg" alt="" /><span>EVENTODOS</span></a><p>Momentos que nos encuentran.</p><span>© 2026 EVENTODOS</span></footer>
 
       {showRaffleForm && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowRaffleForm(false)}><section className="raffle-modal" role="dialog" aria-modal="true" aria-labelledby="raffle-modal-title"><div className="modal-heading"><div><p className="eyebrow">NUEVA PUBLICACIÓN</p><h2 id="raffle-modal-title">Crea tu rifa</h2></div><button className="close-button" type="button" aria-label="Cerrar" onClick={() => setShowRaffleForm(false)}>×</button></div><label className="form-field">Nombre de la rifa<input value={raffleName} onChange={(event) => setRaffleName(event.target.value)} placeholder="Ej. Una bici para tu próximo viaje" /></label><label className="form-field">Valor del boleto<input type="number" min="1" value={rafflePrice} onChange={(event) => setRafflePrice(event.target.value)} placeholder="$ 2.000" /></label><div className="status-explainer"><span className="status-dot public"/><div><strong>Pública</strong><p>Visible para todas las personas y disponible para participar.</p></div><span className="status-dot draft"/><div><strong>Borrador</strong><p>Guárdala y termínala cuando quieras.</p></div></div><div className="modal-actions"><button className="button button-outline" type="button" onClick={() => createRaffle('Borrador')}>Guardar borrador</button><button className="button button-dark" type="button" onClick={() => createRaffle('Pública')}>Publicar rifa <span aria-hidden="true">↗</span></button></div></section></div>}
+      {activeTab === 'Perfil' && role === 'Organizador' && showEventForm && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowEventForm(false)}><section className="raffle-modal event-form-modal" role="dialog" aria-modal="true" aria-labelledby="event-form-title"><div className="modal-heading"><div><p className="eyebrow">PUBLICACIÓN DE EVENTO</p><h2 id="event-form-title">{editingEventId ? 'Editar evento' : 'Crear evento'}</h2></div><button className="close-button" type="button" aria-label="Cerrar formulario" onClick={() => setShowEventForm(false)}>×</button></div><form onSubmit={(event) => { event.preventDefault(); saveEvent('Pública') }}><label className="form-field">Nombre<input required maxLength="100" value={eventForm.name} onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))} placeholder="Ej. Festival de primavera" /></label><label className="form-field">Descripción<textarea required maxLength="1000" rows="3" value={eventForm.description} onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))} placeholder="Cuéntales qué podrán vivir en el evento" /></label><div className="event-form-datetime"><label className="form-field">Fecha<input required type="date" min={todayDate} value={eventForm.date} onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))} /></label><label className="form-field">Hora<input required type="time" value={eventForm.time} onChange={(event) => setEventForm((current) => ({ ...current, time: event.target.value }))} /></label></div><label className="form-field">Lugar<input required maxLength="160" value={eventForm.venue} onChange={(event) => setEventForm((current) => ({ ...current, venue: event.target.value }))} placeholder="Dirección o recinto" /></label><label className="form-field event-image-field">Imagen del evento<input type="file" accept="image/*" onChange={(event) => selectEventImage(event.target.files?.[0])} /><span>JPG, PNG o similar · máximo 2 MB</span></label>{eventForm.image && <img className="event-image-preview" src={eventForm.image} alt="Vista previa de la imagen del evento" />}<div className="status-explainer"><span className="status-dot public"/><div><strong>Pública</strong><p>El evento aparecerá en la agenda para todas las personas.</p></div><span className="status-dot draft"/><div><strong>Borrador</strong><p>Solo tú lo verás en tu perfil de organización.</p></div></div><div className="modal-actions"><button className="button button-outline" type="button" onClick={() => saveEvent('Borrador')}>Guardar como borrador</button><button className="button button-dark" type="submit">{editingEventId ? 'Guardar y publicar' : 'Publicar evento'} <span aria-hidden="true">↗</span></button></div></form></section></div>}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   )

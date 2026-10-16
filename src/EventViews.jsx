@@ -23,7 +23,7 @@ export function EventCatalog({ events, locations, search, onSearchChange, dateFi
       <div className="event-filters">
         <label className="event-filter-search"><span>Buscar por evento o lugar</span><input type="search" value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Ej. jazz, Santiago" /></label>
         <label><span>Fecha</span><select value={dateFilter} onChange={(event) => onDateFilterChange(event.target.value)}><option value="all">Cualquier fecha</option><option value="weekend">Este fin de semana</option><option value="month">Este mes</option></select></label>
-        <label><span>Categoría</span><select value={categoryFilter} onChange={(event) => onCategoryFilterChange(event.target.value)}><option value="all">Todas</option><option value="Música">Música</option><option value="Ferias">Ferias</option><option value="Teatro">Teatro</option></select></label>
+        <label><span>Categoría</span><select value={categoryFilter} onChange={(event) => onCategoryFilterChange(event.target.value)}><option value="all">Todas</option><option value="Música">Música</option><option value="Ferias">Ferias</option><option value="Teatro">Teatro</option><option value="Otros">Otros</option></select></label>
         <label><span>Ubicación</span><select value={locationFilter} onChange={(event) => onLocationFilterChange(event.target.value)}><option value="all">Todas</option>{locations.map((location) => <option key={location} value={location}>{location}</option>)}</select></label>
       </div>
       <div className="events-results-heading"><p aria-live="polite">{status === 'ready' ? `${events.length} ${events.length === 1 ? 'evento' : 'eventos'}` : 'Actualizando eventos'}</p></div>
