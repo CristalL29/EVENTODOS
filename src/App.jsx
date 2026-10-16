@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 import { EventCard, EventCatalog, EventDetails } from './EventViews.jsx'
+import PurchaseActivity from './PurchaseActivity.jsx'
 
 const initialEvents = [
   {
@@ -81,16 +82,19 @@ const initialNotices = [
   { id: 3, title: 'Nueva información del evento', detail: 'El acceso a Mercado creativo abre desde las 10:30.', time: '12 oct', type: 'info', unread: false },
 ]
 
-const tabs = ['Inicio', 'Eventos', 'Rifas', 'Avisos', 'Perfil']
+const buyerTabs = ['Inicio', 'Eventos', 'Rifas', 'Compras y Actividad', 'Avisos', 'Perfil']
+const organizerTabs = ['Inicio', 'Eventos', 'Rifas', 'Avisos', 'Perfil']
 const formatPrice = (amount) => `$${amount.toLocaleString('es-CL')}`
 const formatDate = (value) => new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`))
 const todayDate = new Date().toISOString().slice(0, 10)
 const emptyEventForm = { name: '', description: '', date: '', time: '', venue: '', image: '' }
 const eventStorageKey = 'eventodos-events'
+const purchaseStorageKey = 'eventodos-purchases'
 
 function App() {
   const [activeTab, setActiveTab] = useState('Inicio')
   const [role, setRole] = useState('Comprador')
+  const tabs = role === 'Comprador' ? buyerTabs : organizerTabs
   const [sortOrder, setSortOrder] = useState('asc')
   const [events, setEvents] = useState(() => {
     try {
@@ -107,6 +111,14 @@ function App() {
   const [selectedEventId, setSelectedEventId] = useState(null)
   const [eventLoadStatus, setEventLoadStatus] = useState('ready')
   const [raffles, setRaffles] = useState(initialRaffles)
+  const [purchases, setPurchases] = useState(() => {
+    try {
+      const savedPurchases = JSON.parse(window.localStorage.getItem(purchaseStorageKey))
+      return Array.isArray(savedPurchases) ? savedPurchases : []
+    } catch {
+      return []
+    }
+  })
   const [notices, setNotices] = useState(initialNotices)
   const [showRaffleForm, setShowRaffleForm] = useState(false)
   const [showEventForm, setShowEventForm] = useState(false)
@@ -138,9 +150,50 @@ function App() {
     window.localStorage.setItem(eventStorageKey, JSON.stringify(events))
   }, [events])
 
+  useEffect(() => {
+    window.localStorage.setItem(purchaseStorageKey, JSON.stringify(purchases))
+  }, [purchases])
+
   function showMessage(message) {
     setToast(message)
     window.setTimeout(() => setToast(''), 2600)
+  }
+
+  function changeRole(nextRole) {
+    setRole(nextRole)
+    if (nextRole === 'Organizador' && activeTab === 'Compras y Actividad') setActiveTab('Inicio')
+  }
+
+  function createTransactionId() {
+    return `EVT-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`
+  }
+
+  function recordEventPurchase(event, ticketSelections) {
+    const transactionId = createTransactionId()
+    const purchaseDate = new Date().toISOString()
+    const total = ticketSelections.reduce((sum, ticket) => sum + ticket.price * ticket.quantity, 0)
+    let ticketIndex = 0
+    const newPurchases = ticketSelections.flatMap((ticket) => Array.from({ length: ticket.quantity }, () => {
+      ticketIndex += 1
+      const ticketNumber = `EVT-${Date.now().toString(36).toUpperCase()}-${ticketIndex}`
+      return {
+        id: `${transactionId}-${ticketIndex}`,
+        title: event.name,
+        type: 'Evento',
+        date: event.date,
+        purchaseDate,
+        total,
+        price: ticket.price,
+        ticketType: ticket.name,
+        transactionId,
+        ticketNumber,
+        organizer: event.organizer,
+        venue: event.venue,
+        qrPayload: JSON.stringify({ code: ticketNumber, transactionId, title: event.name, date: event.date }),
+      }
+    }))
+    setPurchases((current) => [...newPurchases, ...current])
+    showMessage('Boletos de demostración guardados en Compras y Actividad.')
   }
 
   function createRaffle(status) {
@@ -225,8 +278,26 @@ function App() {
     reader.readAsDataURL(file)
   }
 
-  function buyTicket(name) {
-    showMessage(`¡Listo! Agregaste ${name} a tus entradas.`)
+  function buyTicket(raffle) {
+    const transactionId = createTransactionId()
+    const ticketNumber = `RIF-${Date.now().toString(36).toUpperCase()}`
+    const purchaseDate = new Date().toISOString()
+    setPurchases((current) => [{
+      id: transactionId,
+      title: raffle.name,
+      type: 'Rifa',
+      date: raffle.date,
+      purchaseDate,
+      total: raffle.price,
+      price: raffle.price,
+      ticketType: 'Número de participación',
+      transactionId,
+      ticketNumber,
+      organizer: raffle.organizer,
+      venue: 'Participación digital',
+      qrPayload: JSON.stringify({ code: ticketNumber, transactionId, title: raffle.name, date: raffle.date }),
+    }, ...current])
+    showMessage('Número de participación de demostración guardado en Compras y Actividad.')
   }
 
   function openEventCatalog() {
@@ -266,8 +337,8 @@ function App() {
         </nav>
         <div className="top-actions">
           <div className="role-switch" aria-label="Cambiar tipo de perfil">
-            <button type="button" className={role === 'Comprador' ? 'selected' : ''} onClick={() => setRole('Comprador')}>Comprador</button>
-            <button type="button" className={role === 'Organizador' ? 'selected' : ''} onClick={() => setRole('Organizador')}>Organizador</button>
+            <button type="button" className={role === 'Comprador' ? 'selected' : ''} onClick={() => changeRole('Comprador')}>Comprador</button>
+            <button type="button" className={role === 'Organizador' ? 'selected' : ''} onClick={() => changeRole('Organizador')}>Organizador</button>
           </div>
           <button className="avatar" type="button" aria-label="Abrir perfil" onClick={() => setActiveTab('Perfil')}>CM</button>
         </div>
@@ -298,7 +369,7 @@ function App() {
         )}
 
         {activeTab === 'Eventos' && (selectedEvent
-          ? <EventDetails key={selectedEvent.id} event={selectedEvent} onBack={openEventCatalog} />
+          ? <EventDetails key={selectedEvent.id} event={selectedEvent} onBack={openEventCatalog} onPurchase={recordEventPurchase} />
           : <EventCatalog
             events={filteredEvents}
             locations={eventLocations}
@@ -317,11 +388,13 @@ function App() {
             onView={openEventDetails}
           />)}
 
-        {activeTab === 'Rifas' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">PARTICIPA, COMPARTE, GANA</p><h1>Rifas con propósito</h1><p>Oportunidades que impulsan grandes causas.</p></div>{role === 'Organizador' && <button className="button button-dark" type="button" onClick={() => setShowRaffleForm(true)}>＋ Crear rifa</button>}</div><div className="raffle-callout"><span className="callout-symbol">✳</span><div><strong>Tu participación hace la diferencia.</strong><p>Cada boleto apoya a una comunidad o proyecto local.</p></div><span className="callout-count">{popularRaffles.length} activas</span></div><div className="raffle-list">{raffles.filter((raffle) => role === 'Organizador' || raffle.status === 'Pública').sort((a, b) => b.sold - a.sold).map((raffle) => <RaffleRow key={raffle.id} raffle={raffle} onJoin={() => buyTicket(raffle.name)} isOrganizer={role === 'Organizador'} />)}</div></section>}
+        {activeTab === 'Rifas' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">PARTICIPA, COMPARTE, GANA</p><h1>Rifas con propósito</h1><p>Oportunidades que impulsan grandes causas.</p></div>{role === 'Organizador' && <button className="button button-dark" type="button" onClick={() => setShowRaffleForm(true)}>＋ Crear rifa</button>}</div><div className="raffle-callout"><span className="callout-symbol">✳</span><div><strong>Tu participación hace la diferencia.</strong><p>Cada boleto apoya a una comunidad o proyecto local.</p></div><span className="callout-count">{popularRaffles.length} activas</span></div><div className="raffle-list">{raffles.filter((raffle) => role === 'Organizador' || raffle.status === 'Pública').sort((a, b) => b.sold - a.sold).map((raffle) => <RaffleRow key={raffle.id} raffle={raffle} onJoin={() => buyTicket(raffle)} isOrganizer={role === 'Organizador'} />)}</div></section>}
+
+        {activeTab === 'Compras y Actividad' && role === 'Comprador' && <PurchaseActivity purchases={purchases} onNavigate={setActiveTab} />}
 
         {activeTab === 'Avisos' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">NOVEDADES DE TUS PLANES</p><h1>Avisos</h1><p>Cambios e información de tus entradas y eventos.</p></div>{unreadCount > 0 && <button className="text-action" type="button" onClick={markNoticesRead}>Marcar todo como leído</button>}</div><div className="notice-list">{notices.map((notice) => <NoticeItem key={notice.id} notice={notice} />)}</div></section>}
 
-        {activeTab === 'Perfil' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">TU ESPACIO EN EVENTODOS</p><h1>{role === 'Comprador' ? 'Hola, Camila.' : 'Panel de organización'}</h1><p>{role === 'Comprador' ? 'Aquí comienza tu próxima historia.' : 'Administra tus eventos y conecta con tu comunidad.'}</p></div><div className="role-switch profile-role"><button className={role === 'Comprador' ? 'selected' : ''} onClick={() => setRole('Comprador')} type="button">Comprador</button><button className={role === 'Organizador' ? 'selected' : ''} onClick={() => setRole('Organizador')} type="button">Organizador</button></div></div>{role === 'Comprador' ? <div className="profile-layout"><div className="profile-stat"><span>ENTRADAS ACTIVAS</span><strong>2</strong><button type="button" className="text-action" onClick={() => showMessage('Tus entradas están al día.')}>Ver mis entradas ↗</button></div><div className="profile-stat"><span>RIFAS EN LAS QUE PARTICIPAS</span><strong>1</strong><button type="button" className="text-action" onClick={() => setActiveTab('Rifas')}>Explorar rifas ↗</button></div><div className="profile-detail"><p className="eyebrow">DATOS DE LA CUENTA</p><h2>Camila Morales</h2><p>camila.morales@email.com</p><button className="button button-outline" type="button" onClick={() => showMessage('Pronto podrás editar tus datos.')}>Editar perfil</button></div></div> : <><div className="organizer-stats"><div><span>RIFAS PUBLICADAS</span><strong>{raffles.filter((raffle) => raffle.status === 'Pública').length}</strong></div><div><span>BOLETOS VENDIDOS</span><strong>{raffles.reduce((total, raffle) => total + raffle.sold, 0).toLocaleString('es-CL')}</strong></div><div><span>BORRADORES</span><strong>{raffles.filter((raffle) => raffle.status === 'Borrador').length}</strong></div><button className="button button-dark" type="button" onClick={() => setShowRaffleForm(true)}>＋ Crear rifa</button></div><div className="organizer-table"><div className="table-heading"><div><p className="eyebrow">TU ACTIVIDAD</p><h2>Rifas y publicaciones</h2></div><button className="text-action" type="button" onClick={() => setActiveTab('Rifas')}>Ver todas ↗</button></div>{raffles.map((raffle) => <RaffleRow key={raffle.id} raffle={raffle} onJoin={() => {}} isOrganizer />)}</div></>}</section>}
+        {activeTab === 'Perfil' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">TU ESPACIO EN EVENTODOS</p><h1>{role === 'Comprador' ? 'Hola, Camila.' : 'Panel de organización'}</h1><p>{role === 'Comprador' ? 'Aquí comienza tu próxima historia.' : 'Administra tus eventos y conecta con tu comunidad.'}</p></div><div className="role-switch profile-role"><button className={role === 'Comprador' ? 'selected' : ''} onClick={() => changeRole('Comprador')} type="button">Comprador</button><button className={role === 'Organizador' ? 'selected' : ''} onClick={() => changeRole('Organizador')} type="button">Organizador</button></div></div>{role === 'Comprador' ? <div className="profile-layout"><div className="profile-stat"><span>ENTRADAS ACTIVAS</span><strong>{purchases.filter((purchase) => purchase.type === 'Evento' && purchase.date >= todayDate).length}</strong><button type="button" className="text-action" onClick={() => setActiveTab('Compras y Actividad')}>Ver mis entradas ↗</button></div><div className="profile-stat"><span>RIFAS EN LAS QUE PARTICIPAS</span><strong>{purchases.filter((purchase) => purchase.type === 'Rifa').length}</strong><button type="button" className="text-action" onClick={() => setActiveTab('Compras y Actividad')}>Ver mi actividad ↗</button></div><div className="profile-detail"><p className="eyebrow">DATOS DE LA CUENTA</p><h2>Camila Morales</h2><p>camila.morales@email.com</p><button className="button button-outline" type="button" onClick={() => showMessage('Pronto podrás editar tus datos.')}>Editar perfil</button></div></div> : <><div className="organizer-stats"><div><span>RIFAS PUBLICADAS</span><strong>{raffles.filter((raffle) => raffle.status === 'Pública').length}</strong></div><div><span>BOLETOS VENDIDOS</span><strong>{raffles.reduce((total, raffle) => total + raffle.sold, 0).toLocaleString('es-CL')}</strong></div><div><span>BORRADORES</span><strong>{raffles.filter((raffle) => raffle.status === 'Borrador').length}</strong></div><button className="button button-dark" type="button" onClick={() => setShowRaffleForm(true)}>＋ Crear rifa</button></div><div className="organizer-table"><div className="table-heading"><div><p className="eyebrow">TU ACTIVIDAD</p><h2>Rifas y publicaciones</h2></div><button className="text-action" type="button" onClick={() => setActiveTab('Rifas')}>Ver todas ↗</button></div>{raffles.map((raffle) => <RaffleRow key={raffle.id} raffle={raffle} onJoin={() => {}} isOrganizer />)}</div></>}</section>}
 
         {activeTab === 'Perfil' && role === 'Organizador' && <section className="organizer-events-section"><div className="table-heading"><div><p className="eyebrow">PUBLICACIONES DE EVENTOS</p><h2>Mis eventos</h2></div><button className="button button-dark" type="button" onClick={() => openEventForm()}>＋ Crear evento</button></div><div className="organizer-event-stats"><span>{organizerEvents.filter((event) => event.status === 'Pública').length} publicados</span><span>{organizerEvents.filter((event) => event.status === 'Borrador').length} borradores</span></div>{organizerEvents.length ? <div className="organizer-event-list">{organizerEvents.map((event) => <article className="organizer-event-row" key={event.id}>{event.images?.[0]?.src ? <img src={event.images[0].src} alt="" /> : <div className="organizer-event-placeholder" aria-hidden="true">{event.mark}</div>}<div className="organizer-event-copy"><div className="organizer-event-title"><h3>{event.name}</h3><span className={`status-label ${event.status === 'Pública' ? 'is-public' : 'is-draft'}`}>{event.status}</span></div><p>{formatDate(event.date)} · {event.time} · {event.venue}</p><p className="organizer-event-description">{event.description}</p></div><button className="button button-outline" type="button" onClick={() => openEventForm(event)}>Editar</button></article>)}</div> : <p className="organizer-events-empty">Aún no tienes eventos. Crea uno y guárdalo como borrador o publícalo para que aparezca en la agenda.</p>}</section>}
       </main>

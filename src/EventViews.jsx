@@ -35,7 +35,7 @@ export function EventCatalog({ events, locations, search, onSearchChange, dateFi
   )
 }
 
-export function EventDetails({ event, onBack }) {
+export function EventDetails({ event, onBack, onPurchase }) {
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [quantities, setQuantities] = useState({})
   const [showContact, setShowContact] = useState(false)
@@ -46,6 +46,11 @@ export function EventDetails({ event, onBack }) {
   const selectedTickets = tickets.filter((ticket) => quantities[ticket.id] > 0)
   const total = selectedTickets.reduce((sum, ticket) => sum + ticket.price * quantities[ticket.id], 0)
   const activeImage = images[activeImageIndex]
+
+  function confirmSelection() {
+    onPurchase(event, selectedTickets.map((ticket) => ({ ...ticket, quantity: quantities[ticket.id] })))
+    setShowConfirmation(true)
+  }
 
   function changeQuantity(ticketId, change) {
     setQuantities((current) => {
@@ -83,12 +88,12 @@ export function EventDetails({ event, onBack }) {
         <aside className="ticket-panel" aria-label="Boletos de demostración">
           <div className="ticket-panel-heading"><p className="eyebrow">SELECCIÓN DE PRUEBA</p><h2>Elige tus boletos</h2><p>Hasta 6 boletos por selección.</p></div>
           {tickets.length ? <div className="ticket-options">{tickets.map((ticket) => <article className="ticket-option" key={ticket.id}><div className="ticket-option-copy"><h3>{ticket.name || 'Boleto'}</h3><strong>{formatPrice(ticket.price)} <small>ficticios</small></strong><p>{ticket.description || 'Características por confirmar.'}</p></div><div className="quantity-control" aria-label={`Cantidad de ${ticket.name}`}><button type="button" aria-label={`Quitar un boleto ${ticket.name}`} disabled={!quantities[ticket.id]} onClick={() => changeQuantity(ticket.id, -1)}>−</button><output aria-live="polite">{quantities[ticket.id] ?? 0}</output><button type="button" aria-label={`Agregar un boleto ${ticket.name}`} disabled={selectedCount >= 6} onClick={() => changeQuantity(ticket.id, 1)}>+</button></div></article>)}</div> : <p className="ticket-unavailable">Los tipos de boletos están por confirmar.</p>}
-          <div className="ticket-summary"><div><span>Boletos seleccionados</span><strong>{selectedCount}</strong></div><div className="ticket-summary-total"><span>Total ficticio</span><strong>{formatPrice(total)}</strong></div><button className="button button-dark" type="button" disabled={!selectedCount} onClick={() => setShowConfirmation(true)}>Confirmar selección ficticia</button><p>No se solicitan datos de pago ni se realiza ningún cargo.</p></div>
+          <div className="ticket-summary"><div><span>Boletos seleccionados</span><strong>{selectedCount}</strong></div><div className="ticket-summary-total"><span>Total ficticio</span><strong>{formatPrice(total)}</strong></div><button className="button button-dark" type="button" disabled={!selectedCount} onClick={confirmSelection}>Confirmar selección ficticia</button><p>No se solicitan datos de pago ni se realiza ningún cargo real.</p></div>
         </aside>
       </div>
 
       {showContact && <div className="event-modal-backdrop" role="presentation" onMouseDown={(eventClick) => eventClick.target === eventClick.currentTarget && setShowContact(false)}><section className="event-modal" role="dialog" aria-modal="true" aria-labelledby="contact-title"><div className="event-modal-heading"><div><p className="eyebrow">CONTACTO FICTICIO</p><h2 id="contact-title">{event.organizer || 'Organizador'}</h2></div><button className="close-button" type="button" aria-label="Cerrar contacto" onClick={() => setShowContact(false)}>×</button></div><p className="contact-detail"><span>Correo</span><strong>{event.contact?.email || 'Correo por confirmar'}</strong></p><p className="contact-detail"><span>Teléfono</span><strong>{event.contact?.phone || 'Teléfono por confirmar'}</strong></p><p className="modal-disclaimer">Datos de muestra. No se enviará ningún mensaje ni se realizará ninguna llamada.</p><button type="button" className="button button-dark" onClick={() => setShowContact(false)}>Cerrar</button></section></div>}
-      {showConfirmation && <div className="event-modal-backdrop" role="presentation" onMouseDown={(eventClick) => eventClick.target === eventClick.currentTarget && setShowConfirmation(false)}><section className="event-modal confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="confirmation-title"><div className="confirmation-mark" aria-hidden="true">✓</div><p className="eyebrow">CONFIRMACIÓN FICTICIA</p><h2 id="confirmation-title">Selección de prueba lista</h2><p className="confirmation-copy">Esta demostración no creó una compra ni generó boletos válidos.</p><div className="confirmation-items">{selectedTickets.map((ticket) => <div key={ticket.id}><span>{quantities[ticket.id]} × {ticket.name}</span><strong>{formatPrice(ticket.price * quantities[ticket.id])}</strong></div>)}</div><div className="confirmation-total"><span>Total ficticio</span><strong>{formatPrice(total)}</strong></div><p className="modal-disclaimer">No se realizó ningún pago, cargo ni pedido real.</p><button type="button" className="button button-dark" onClick={() => setShowConfirmation(false)}>Volver al evento</button></section></div>}
+      {showConfirmation && <div className="event-modal-backdrop" role="presentation" onMouseDown={(eventClick) => eventClick.target === eventClick.currentTarget && setShowConfirmation(false)}><section className="event-modal confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="confirmation-title"><div className="confirmation-mark" aria-hidden="true">✓</div><p className="eyebrow">CONFIRMACIÓN DE DEMOSTRACIÓN</p><h2 id="confirmation-title">Tus boletos están listos</h2><p className="confirmation-copy">Guardamos tus boletos de prueba en Compras y Actividad.</p><div className="confirmation-items">{selectedTickets.map((ticket) => <div key={ticket.id}><span>{quantities[ticket.id]} × {ticket.name}</span><strong>{formatPrice(ticket.price * quantities[ticket.id])}</strong></div>)}</div><div className="confirmation-total"><span>Total ficticio</span><strong>{formatPrice(total)}</strong></div><p className="modal-disclaimer">No se realizó ningún pago ni cargo. Estos boletos no son válidos para acceder al evento.</p><button type="button" className="button button-dark" onClick={() => setShowConfirmation(false)}>Volver al evento</button></section></div>}
     </section>
   )
 }
