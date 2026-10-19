@@ -112,36 +112,43 @@ const todayDate = new Date().toISOString().slice(0, 10)
 const emptyEventForm = { name: '', description: '', date: '', time: '', venue: '', image: '' }
 const eventStorageKey = 'eventodos-events'
 const purchaseStorageKey = 'eventodos-purchases'
+const raffleStorageKey = 'eventodos-raffles'
+const noticeStorageKey = 'eventodos-notices'
+const roleStorageKey = 'eventodos-role'
+
+function readStoredArray(key, fallback) {
+  try {
+    const savedValue = window.localStorage.getItem(key)
+    if (!savedValue) return fallback
+    const parsedValue = JSON.parse(savedValue)
+    return Array.isArray(parsedValue) ? parsedValue : fallback
+  } catch {
+    return fallback
+  }
+}
 
 function App() {
   const [activeTab, setActiveTab] = useState('Inicio')
-  const [role, setRole] = useState('Comprador')
-  const tabs = role === 'Comprador' ? buyerTabs : organizerTabs
-  const [sortOrder, setSortOrder] = useState('asc')
-  const [events, setEvents] = useState(() => {
+  const [role, setRole] = useState(() => {
     try {
-      const savedEvents = JSON.parse(window.localStorage.getItem(eventStorageKey))
-      return Array.isArray(savedEvents) ? savedEvents : initialEvents
+      const savedRole = window.localStorage.getItem(roleStorageKey)
+      return savedRole === 'Organizador' ? savedRole : 'Comprador'
     } catch {
-      return initialEvents
+      return 'Comprador'
     }
   })
+  const tabs = role === 'Comprador' ? buyerTabs : organizerTabs
+  const [sortOrder, setSortOrder] = useState('asc')
+  const [events, setEvents] = useState(() => readStoredArray(eventStorageKey, initialEvents))
   const [eventSearch, setEventSearch] = useState('')
   const [eventDateFilter, setEventDateFilter] = useState('all')
   const [eventCategoryFilter, setEventCategoryFilter] = useState('all')
   const [eventLocationFilter, setEventLocationFilter] = useState('all')
   const [selectedEventId, setSelectedEventId] = useState(null)
   const [eventLoadStatus, setEventLoadStatus] = useState('ready')
-  const [raffles, setRaffles] = useState(initialRaffles)
-  const [purchases, setPurchases] = useState(() => {
-    try {
-      const savedPurchases = JSON.parse(window.localStorage.getItem(purchaseStorageKey))
-      return Array.isArray(savedPurchases) ? savedPurchases : []
-    } catch {
-      return []
-    }
-  })
-  const [notices, setNotices] = useState(initialNotices)
+  const [raffles, setRaffles] = useState(() => readStoredArray(raffleStorageKey, initialRaffles))
+  const [purchases, setPurchases] = useState(() => readStoredArray(purchaseStorageKey, []))
+  const [notices, setNotices] = useState(() => readStoredArray(noticeStorageKey, initialNotices))
   const [showRaffleForm, setShowRaffleForm] = useState(false)
   const [showEventForm, setShowEventForm] = useState(false)
   const [editingEventId, setEditingEventId] = useState(null)
@@ -175,6 +182,18 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(purchaseStorageKey, JSON.stringify(purchases))
   }, [purchases])
+
+  useEffect(() => {
+    window.localStorage.setItem(raffleStorageKey, JSON.stringify(raffles))
+  }, [raffles])
+
+  useEffect(() => {
+    window.localStorage.setItem(noticeStorageKey, JSON.stringify(notices))
+  }, [notices])
+
+  useEffect(() => {
+    window.localStorage.setItem(roleStorageKey, role)
+  }, [role])
 
   function showMessage(message) {
     setToast(message)
