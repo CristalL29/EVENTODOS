@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import './App.css'
 import { EventCard, EventCatalog, EventDetails } from './EventViews.jsx'
 import PurchaseActivity from './PurchaseActivity.jsx'
+import RaffleCatalog from './RaffleCatalog.jsx'
 
 const initialEvents = [
   {
@@ -71,9 +72,30 @@ const initialEvents = [
 ]
 
 const initialRaffles = [
-  { id: 1, name: 'Rifa solidaria: bici urbana', organizer: 'Pedal por la ciudad', sold: 628, total: 800, price: 2000, status: 'Pública', date: '2026-10-19' },
-  { id: 2, name: 'Una escapada al sur', organizer: 'Fundación Bosque Vivo', sold: 412, total: 600, price: 3500, status: 'Pública', date: '2026-10-22' },
-  { id: 3, name: 'Kit de ilustración', organizer: 'Taller Nube', sold: 286, total: 500, price: 1500, status: 'Pública', date: '2026-10-26' },
+  {
+    id: 1, name: 'Rifa solidaria: bici urbana', organizer: 'Pedal por la ciudad', cause: 'Movilidad sustentable para jóvenes',
+    sold: 628, total: 800, price: 2000, status: 'Pública', date: '2026-10-19', prize: 'Bicicleta urbana',
+    description: 'Ayúdanos a llevar más bicicletas y talleres de mecánica a los barrios. Todo lo recaudado en esta rifa ficticia apoya el programa comunitario de movilidad.',
+    prizeFeatures: ['Bicicleta urbana de marco liviano', 'Canasto delantero y luces recargables', 'Premio ficticio, sin entrega ni valor comercial'],
+    image: 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1200&q=85',
+    imageAlt: 'Bicicleta urbana apoyada junto a una pared',
+  },
+  {
+    id: 2, name: 'Una escapada al sur', organizer: 'Fundación Bosque Vivo', cause: 'Reforestación de bosque nativo',
+    sold: 412, total: 600, price: 3500, status: 'Pública', date: '2026-10-22', prize: 'Fin de semana en una cabaña',
+    description: 'Una pausa para conectar con la naturaleza mientras apoyas iniciativas de restauración de bosque nativo. La estadía y esta participación son parte de una demostración.',
+    prizeFeatures: ['Dos noches para dos personas', 'Cabaña ficticia en un entorno natural', 'No incluye traslados ni representa una reserva real'],
+    image: 'https://images.unsplash.com/photo-1449158743715-0a90ebb6d2d8?auto=format&fit=crop&w=1200&q=85',
+    imageAlt: 'Cabaña rodeada de árboles en un bosque',
+  },
+  {
+    id: 3, name: 'Kit de ilustración', organizer: 'Taller Nube', cause: 'Talleres de arte para niñas y niños',
+    sold: 286, total: 500, price: 1500, status: 'Pública', date: '2026-10-26', prize: 'Set creativo de ilustración',
+    description: 'Participa por un kit pensado para dar vida a nuevas ideas y colaborar con talleres artísticos gratuitos de la comunidad.',
+    prizeFeatures: ['Cuaderno de dibujo y lápices de colores', 'Set ficticio de materiales de ilustración', 'Premio demostrativo, no se realizan envíos'],
+    image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=1200&q=85',
+    imageAlt: 'Materiales de arte y una ilustración sobre una mesa',
+  },
 ]
 
 const initialNotices = [
@@ -201,7 +223,22 @@ function App() {
       showMessage('Completa el nombre y el valor del boleto.')
       return
     }
-    setRaffles((current) => [{ id: Date.now(), name: raffleName.trim(), organizer: 'Tu organización', sold: 0, total: 100, price: Number(rafflePrice), status, date: '2026-11-15' }, ...current])
+    setRaffles((current) => [{
+      id: Date.now(),
+      name: raffleName.trim(),
+      organizer: 'Tu organización',
+      cause: 'Apoyo a un proyecto de la comunidad',
+      sold: 0,
+      total: 100,
+      price: Number(rafflePrice),
+      status,
+      date: '2026-11-15',
+      prize: 'Premio sorpresa',
+      description: 'Esta rifa ficticia apoya un proyecto local de la comunidad.',
+      prizeFeatures: ['Premio de demostración', 'Sin entrega ni valor comercial'],
+      image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=1200&q=85',
+      imageAlt: 'Materiales creativos para un premio de demostración',
+    }, ...current])
     setRaffleName('')
     setRafflePrice('')
     setShowRaffleForm(false)
@@ -278,26 +315,37 @@ function App() {
     reader.readAsDataURL(file)
   }
 
-  function buyTicket(raffle) {
+  function buyTicket(raffle, quantity) {
+    const availableTickets = raffle.total - raffle.sold
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > availableTickets) {
+      showMessage('La cantidad seleccionada supera los boletos disponibles.')
+      return false
+    }
     const transactionId = createTransactionId()
-    const ticketNumber = `RIF-${Date.now().toString(36).toUpperCase()}`
     const purchaseDate = new Date().toISOString()
-    setPurchases((current) => [{
-      id: transactionId,
-      title: raffle.name,
-      type: 'Rifa',
-      date: raffle.date,
-      purchaseDate,
-      total: raffle.price,
-      price: raffle.price,
-      ticketType: 'Número de participación',
-      transactionId,
-      ticketNumber,
-      organizer: raffle.organizer,
-      venue: 'Participación digital',
-      qrPayload: JSON.stringify({ code: ticketNumber, transactionId, title: raffle.name, date: raffle.date }),
-    }, ...current])
-    showMessage('Número de participación de demostración guardado en Compras y Actividad.')
+    const timestamp = Date.now().toString(36).toUpperCase()
+    const newPurchases = Array.from({ length: quantity }, (_, index) => {
+      const ticketNumber = `RIF-${timestamp}-${index + 1}`
+      return {
+        id: `${transactionId}-${index + 1}`,
+        title: raffle.name,
+        type: 'Rifa',
+        date: raffle.date,
+        purchaseDate,
+        total: raffle.price,
+        price: raffle.price,
+        ticketType: 'Número de participación',
+        transactionId,
+        ticketNumber,
+        organizer: raffle.organizer,
+        venue: 'Participación digital · demostración',
+        qrPayload: JSON.stringify({ code: ticketNumber, transactionId, title: raffle.name, date: raffle.date }),
+      }
+    })
+    setPurchases((current) => [...newPurchases, ...current])
+    setRaffles((current) => current.map((item) => item.id === raffle.id ? { ...item, sold: item.sold + quantity } : item))
+    showMessage(`${quantity} ${quantity === 1 ? 'participación ficticia registrada' : 'participaciones ficticias registradas'} en Compras y Actividad.`)
+    return true
   }
 
   function openEventCatalog() {
@@ -388,7 +436,7 @@ function App() {
             onView={openEventDetails}
           />)}
 
-        {activeTab === 'Rifas' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">PARTICIPA, COMPARTE, GANA</p><h1>Rifas con propósito</h1><p>Oportunidades que impulsan grandes causas.</p></div>{role === 'Organizador' && <button className="button button-dark" type="button" onClick={() => setShowRaffleForm(true)}>＋ Crear rifa</button>}</div><div className="raffle-callout"><span className="callout-symbol">✳</span><div><strong>Tu participación hace la diferencia.</strong><p>Cada boleto apoya a una comunidad o proyecto local.</p></div><span className="callout-count">{popularRaffles.length} activas</span></div><div className="raffle-list">{raffles.filter((raffle) => role === 'Organizador' || raffle.status === 'Pública').sort((a, b) => b.sold - a.sold).map((raffle) => <RaffleRow key={raffle.id} raffle={raffle} onJoin={() => buyTicket(raffle)} isOrganizer={role === 'Organizador'} />)}</div></section>}
+        {activeTab === 'Rifas' && <RaffleCatalog raffles={raffles} isOrganizer={role === 'Organizador'} onParticipate={buyTicket} onCreate={() => setShowRaffleForm(true)} />}
 
         {activeTab === 'Compras y Actividad' && role === 'Comprador' && <PurchaseActivity purchases={purchases} onNavigate={setActiveTab} />}
 
