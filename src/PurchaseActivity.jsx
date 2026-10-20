@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 
 const formatPrice = (amount) => `$${(amount ?? 0).toLocaleString('es-CL')}`
@@ -8,14 +8,23 @@ const formatDate = (value) => value
 const formatPurchaseDate = (value) => value
   ? new Intl.DateTimeFormat('es-CL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
   : 'Fecha por confirmar'
-const todayDate = () => new Date().toISOString().slice(0, 10)
+function getTicketStatus(value) {
+  if (!value) return 'Próximamente'
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  if (value < today) return 'Finalizado'
+  if (value > today) return 'Próximamente'
+  return 'En curso'
+}
 
-function DigitalTicket({ ticket, onClose }) {
+function DigitalTicket({ ticket, onClose, autoGeneratePdf }) {
   const [qrImage, setQrImage] = useState('')
   const [qrError, setQrError] = useState('')
+  const autoPrintTriggered = useRef(false)
 
   useEffect(() => {
     let isCurrent = true
+    autoPrintTriggered.current = false
     setQrImage('')
     setQrError('')
     QRCode.toDataURL(ticket.qrPayload, { width: 220, margin: 1, errorCorrectionLevel: 'M' })
@@ -29,6 +38,13 @@ function DigitalTicket({ ticket, onClose }) {
       isCurrent = false
     }
   }, [ticket])
+
+  useEffect(() => {
+    if (!autoGeneratePdf || !qrImage || autoPrintTriggered.current) return undefined
+    autoPrintTriggered.current = true
+    const printTimeout = window.setTimeout(() => window.print(), 300)
+    return () => window.clearTimeout(printTimeout)
+  }, [autoGeneratePdf, qrImage])
 
   return (
     <div className="ticket-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -60,25 +76,38 @@ function DigitalTicket({ ticket, onClose }) {
         </div>
         <div className="ticket-modal-footer">
           <button className="button button-outline" type="button" onClick={onClose}>Cerrar</button>
-          <button className="button button-dark" type="button" onClick={() => window.print()} disabled={!qrImage}>Descargar / imprimir PDF</button>
+          <button className="button button-dark" type="button" onClick={() => window.print()} disabled={!qrImage}>Generar PDF ficticio</button>
         </div>
+        <p className="ticket-print-hint">En el diálogo de impresión, selecciona «Guardar como PDF» para conservar el boleto digital.</p>
       </section>
     </div>
   )
 }
 
-export default function PurchaseActivity({ purchases, onNavigate }) {
+export default function PurchaseActivity({ purchases, onNavigate, onClearHistory }) {
   const [filter, setFilter] = useState('Activos')
   const [selectedTicket, setSelectedTicket] = useState(null)
+  const [pdfTicketId, setPdfTicketId] = useState(null)
   const orderedPurchases = [...purchases].sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate))
   const filteredPurchases = orderedPurchases.filter((purchase) => (
-    filter === 'Activos' ? purchase.date >= todayDate() : purchase.date < todayDate()
+    filter === 'Activos' ? getTicketStatus(purchase.date) !== 'Finalizado' : getTicketStatus(purchase.date) === 'Finalizado'
   ))
+
+  function openTicket(ticket, generatePdf = false) {
+    setSelectedTicket(ticket)
+    setPdfTicketId(generatePdf ? ticket.id : null)
+  }
+
+  function closeTicket() {
+    setSelectedTicket(null)
+    setPdfTicketId(null)
+  }
 
   return (
     <section className="module-page purchase-page">
       <div className="module-heading">
         <div><p className="eyebrow">TUS ENTRADAS Y TRANSACCIONES</p><h1>Compras y Actividad</h1><p>Consulta tus boletos y revisa los detalles de cada compra.</p></div>
+        <button className="button button-outline button-danger" type="button" disabled={!purchases.length} onClick={onClearHistory}>Borrar historial</button>
       </div>
       <p className="purchase-demo-notice" role="note">Modo demostración: los registros, importes y boletos son ficticios. Los códigos QR no validan accesos reales.</p>
       {purchases.length === 0
@@ -104,12 +133,13 @@ export default function PurchaseActivity({ purchases, onNavigate }) {
           {filteredPurchases.length
             ? <div className="purchase-list">
               {filteredPurchases.map((purchase) => {
-                const isActive = purchase.date >= todayDate()
+                const ticketStatus = getTicketStatus(purchase.date)
+                const ticketStatusClass = ticketStatus === 'En curso' ? 'ongoing' : ticketStatus === 'Finalizado' ? 'finished' : 'upcoming'
                 return (
                   <article className="purchase-card" key={purchase.id}>
                     <div className={`purchase-card-mark ${purchase.type === 'Rifa' ? 'raffle' : ''}`} aria-hidden="true">{purchase.type === 'Rifa' ? '✳' : 'EV'}</div>
                     <div className="purchase-card-main">
-                      <div className="purchase-title-row"><span className="purchase-type">{purchase.type} · {purchase.ticketType}</span><span className={`purchase-status ${isActive ? 'active' : 'past'}`}>{isActive ? 'Activo' : 'Pasado'}</span></div>
+                      <div className="purchase-title-row"><span className="purchase-type">{purchase.type} · {purchase.ticketType}</span><span className={`purchase-status ${ticketStatusClass}`}>{ticketStatus}</span></div>
                       <h2>{purchase.title}</h2>
                       <div className="purchase-facts">
                         <p><span>Fecha del evento/rifa</span><strong>{formatDate(purchase.date)}</strong></p>
@@ -119,14 +149,17 @@ export default function PurchaseActivity({ purchases, onNavigate }) {
                         <p><span>Número de boleto</span><strong>{purchase.ticketNumber}</strong></p>
                       </div>
                     </div>
-                    <button className="button button-outline purchase-view-button" type="button" onClick={() => setSelectedTicket(purchase)}>Ver boleto <span aria-hidden="true">↗</span></button>
+                    <div className="purchase-card-actions">
+                      <button className="button button-outline purchase-view-button" type="button" onClick={() => openTicket(purchase)}>Ver boleto</button>
+                      <button className="button button-dark purchase-view-button" type="button" onClick={() => openTicket(purchase, true)}>Generar PDF</button>
+                    </div>
                   </article>
                 )
               })}
             </div>
             : <div className="purchase-filter-empty"><h2>No hay boletos {filter.toLowerCase()}</h2><p>Prueba con el otro filtro para consultar el resto de tu actividad.</p></div>}
         </>}
-      {selectedTicket && <DigitalTicket ticket={selectedTicket} onClose={() => setSelectedTicket(null)} />}
+      {selectedTicket && <DigitalTicket key={selectedTicket.id} ticket={selectedTicket} onClose={closeTicket} autoGeneratePdf={pdfTicketId === selectedTicket.id} />}
     </section>
   )
 }

@@ -110,6 +110,7 @@ const formatPrice = (amount) => `$${amount.toLocaleString('es-CL')}`
 const formatDate = (value) => new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`))
 const todayDate = new Date().toISOString().slice(0, 10)
 const emptyEventForm = { name: '', description: '', date: '', time: '', venue: '', image: '' }
+const maxRaffleTickets = 10000000
 const eventStorageKey = 'eventodos-events'
 const purchaseStorageKey = 'eventodos-purchases'
 const raffleStorageKey = 'eventodos-raffles'
@@ -125,6 +126,14 @@ function readStoredArray(key, fallback) {
   } catch {
     return fallback
   }
+}
+
+function readStoredRaffles() {
+  return readStoredArray(raffleStorageKey, initialRaffles).map((raffle) => (
+    initialRaffles.some((initialRaffle) => initialRaffle.id === raffle.id) || raffle.owner
+      ? raffle
+      : { ...raffle, owner: 'current-organizer' }
+  ))
 }
 
 function App() {
@@ -146,7 +155,7 @@ function App() {
   const [eventLocationFilter, setEventLocationFilter] = useState('all')
   const [selectedEventId, setSelectedEventId] = useState(null)
   const [eventLoadStatus, setEventLoadStatus] = useState('ready')
-  const [raffles, setRaffles] = useState(() => readStoredArray(raffleStorageKey, initialRaffles))
+  const [raffles, setRaffles] = useState(readStoredRaffles)
   const [purchases, setPurchases] = useState(() => readStoredArray(purchaseStorageKey, []))
   const [notices, setNotices] = useState(() => readStoredArray(noticeStorageKey, initialNotices))
   const [showRaffleForm, setShowRaffleForm] = useState(false)
@@ -156,6 +165,13 @@ function App() {
   const [toast, setToast] = useState('')
   const [raffleName, setRaffleName] = useState('')
   const [rafflePrice, setRafflePrice] = useState('')
+  const [raffleStartDate, setRaffleStartDate] = useState(todayDate)
+  const [raffleEndDate, setRaffleEndDate] = useState('')
+  const [raffleTotal, setRaffleTotal] = useState('100')
+  const [raffleImage, setRaffleImage] = useState('')
+  const [noticeTitle, setNoticeTitle] = useState('')
+  const [noticeDetail, setNoticeDetail] = useState('')
+  const [noticeRaffleId, setNoticeRaffleId] = useState('')
 
   const publicEvents = events.filter((event) => event.status !== 'Borrador')
   const organizerEvents = events.filter((event) => event.owner === 'current-organizer')
@@ -173,6 +189,7 @@ function App() {
   const selectedEvent = publicEvents.find((event) => event.id === selectedEventId)
   const eventLocations = [...new Set(publicEvents.map((event) => event.city))].sort((a, b) => a.localeCompare(b, 'es-CL'))
   const popularRaffles = [...raffles].filter((raffle) => raffle.status === 'Pública').sort((a, b) => b.sold - a.sold)
+  const createdPublicRaffles = raffles.filter((raffle) => raffle.owner === 'current-organizer' && raffle.status === 'Pública')
   const unreadCount = notices.filter((notice) => notice.unread).length
 
   useEffect(() => {
@@ -238,30 +255,116 @@ function App() {
   }
 
   function createRaffle(status) {
-    if (!raffleName.trim() || !rafflePrice) {
-      showMessage('Completa el nombre y el valor del boleto.')
+    const price = Number(rafflePrice)
+    const total = Number(raffleTotal)
+    if (!raffleName.trim() || !rafflePrice || !raffleStartDate || !raffleEndDate) {
+      showMessage('Completa el nombre, el valor y las fechas de inicio y cierre.')
+      return
+    }
+    if (!Number.isInteger(price) || price < 1) {
+      showMessage('El valor del boleto debe ser un número entero mayor que cero.')
+      return
+    }
+    if (raffleStartDate < todayDate || raffleEndDate < raffleStartDate) {
+      showMessage('La fecha de inicio debe ser hoy o posterior y el cierre no puede ser anterior al inicio.')
+      return
+    }
+    if (!Number.isInteger(total) || total < 1 || total > maxRaffleTickets) {
+      showMessage(`La cantidad debe ser un número entero entre 1 y ${maxRaffleTickets.toLocaleString('es-CL')}.`)
       return
     }
     setRaffles((current) => [{
       id: Date.now(),
       name: raffleName.trim(),
       organizer: 'Tu organización',
+      owner: 'current-organizer',
       cause: 'Apoyo a un proyecto de la comunidad',
       sold: 0,
-      total: 100,
-      price: Number(rafflePrice),
+      total,
+      price,
       status,
-      date: '2026-11-15',
+      startDate: raffleStartDate,
+      date: raffleEndDate,
       prize: 'Premio sorpresa',
       description: 'Esta rifa ficticia apoya un proyecto local de la comunidad.',
       prizeFeatures: ['Premio de demostración', 'Sin entrega ni valor comercial'],
-      image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=1200&q=85',
-      imageAlt: 'Materiales creativos para un premio de demostración',
+      image: raffleImage || 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=1200&q=85',
+      imageAlt: raffleImage ? `Imagen de muestra de ${raffleName.trim()}` : 'Materiales creativos para un premio de demostración',
     }, ...current])
     setRaffleName('')
     setRafflePrice('')
+    setRaffleStartDate(todayDate)
+    setRaffleEndDate('')
+    setRaffleTotal('100')
+    setRaffleImage('')
     setShowRaffleForm(false)
     showMessage(status === 'Pública' ? 'Rifa publicada correctamente.' : 'Borrador guardado.')
+  }
+
+  function selectRaffleImage(file) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      showMessage('Selecciona un archivo de imagen válido.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showMessage('La imagen debe pesar menos de 5 MB.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        showMessage('No pudimos leer la imagen. Inténtalo de nuevo.')
+        return
+      }
+      const image = new Image()
+      image.onload = () => {
+        const scale = Math.min(1, 1400 / Math.max(image.width, image.height))
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(image.width * scale)
+        canvas.height = Math.round(image.height * scale)
+        const context = canvas.getContext('2d')
+        if (!context) {
+          showMessage('No pudimos preparar la imagen. Inténtalo de nuevo.')
+          return
+        }
+        context.fillStyle = '#ffffff'
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        context.drawImage(image, 0, 0, canvas.width, canvas.height)
+        setRaffleImage(canvas.toDataURL('image/jpeg', 0.82))
+      }
+      image.onerror = () => showMessage('No pudimos abrir la imagen. Inténtalo de nuevo.')
+      image.src = reader.result
+    }
+    reader.onerror = () => showMessage('No pudimos leer la imagen. Inténtalo de nuevo.')
+    reader.readAsDataURL(file)
+  }
+
+  function createRaffleNotice(event) {
+    event.preventDefault()
+    const raffle = createdPublicRaffles.find((item) => String(item.id) === noticeRaffleId)
+    if (!raffle) {
+      showMessage('Selecciona una rifa pública que hayas creado.')
+      return
+    }
+    if (!noticeTitle.trim() || !noticeDetail.trim()) {
+      showMessage('Completa el título y el mensaje del aviso.')
+      return
+    }
+    setNotices((current) => [{
+      id: Date.now(),
+      title: noticeTitle.trim(),
+      detail: noticeDetail.trim(),
+      time: 'Ahora',
+      type: 'raffle',
+      unread: true,
+      raffleId: raffle.id,
+      raffleName: raffle.name,
+    }, ...current])
+    setNoticeTitle('')
+    setNoticeDetail('')
+    setNoticeRaffleId('')
+    showMessage('Aviso publicado correctamente.')
   }
 
   function openEventForm(eventToEdit = null) {
@@ -335,6 +438,14 @@ function App() {
   }
 
   function buyTicket(raffle, quantity) {
+    if (raffle.startDate && todayDate < raffle.startDate) {
+      showMessage('Esta rifa todavía no ha comenzado.')
+      return false
+    }
+    if (raffle.date && todayDate > raffle.date) {
+      showMessage('El plazo para participar en esta rifa ya terminó.')
+      return false
+    }
     const availableTickets = raffle.total - raffle.sold
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > availableTickets) {
       showMessage('La cantidad seleccionada supera los boletos disponibles.')
@@ -386,6 +497,25 @@ function App() {
 
   function markNoticesRead() {
     setNotices((current) => current.map((notice) => ({ ...notice, unread: false })))
+  }
+
+  function clearPurchaseHistory() {
+    if (!purchases.length || !window.confirm('¿Borrar todo el historial de Compras y Actividad? Esta acción no se puede deshacer.')) return
+    setPurchases([])
+    showMessage('Se borró el historial de Compras y Actividad.')
+  }
+
+  function clearPublishedRaffles() {
+    if (!raffles.some((raffle) => raffle.status === 'Pública')
+      || !window.confirm('¿Borrar todas las rifas publicadas? Los borradores se conservarán. Esta acción no se puede deshacer.')) return
+    setRaffles((current) => current.filter((raffle) => raffle.status !== 'Pública'))
+    showMessage('Se borraron las rifas publicadas.')
+  }
+
+  function clearNotices() {
+    if (!notices.length || !window.confirm('¿Borrar todos los avisos? Esta acción no se puede deshacer.')) return
+    setNotices([])
+    showMessage('Se borraron todos los avisos.')
   }
 
   return (
@@ -455,11 +585,11 @@ function App() {
             onView={openEventDetails}
           />)}
 
-        {activeTab === 'Rifas' && <RaffleCatalog raffles={raffles} isOrganizer={role === 'Organizador'} onParticipate={buyTicket} onCreate={() => setShowRaffleForm(true)} />}
+        {activeTab === 'Rifas' && <RaffleCatalog raffles={raffles} isOrganizer={role === 'Organizador'} onParticipate={buyTicket} onCreate={() => setShowRaffleForm(true)} onClearPublished={clearPublishedRaffles} />}
 
-        {activeTab === 'Compras y Actividad' && role === 'Comprador' && <PurchaseActivity purchases={purchases} onNavigate={setActiveTab} />}
+        {activeTab === 'Compras y Actividad' && role === 'Comprador' && <PurchaseActivity purchases={purchases} onNavigate={setActiveTab} onClearHistory={clearPurchaseHistory} />}
 
-        {activeTab === 'Avisos' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">NOVEDADES DE TUS PLANES</p><h1>Avisos</h1><p>Cambios e información de tus entradas y eventos.</p></div>{unreadCount > 0 && <button className="text-action" type="button" onClick={markNoticesRead}>Marcar todo como leído</button>}</div><div className="notice-list">{notices.map((notice) => <NoticeItem key={notice.id} notice={notice} />)}</div></section>}
+        {activeTab === 'Avisos' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">NOVEDADES DE TUS PLANES</p><h1>Avisos</h1><p>Cambios e información de tus entradas, eventos y rifas.</p></div><div className="module-actions">{unreadCount > 0 && <button className="text-action" type="button" onClick={markNoticesRead}>Marcar todo como leído</button>}<button className="button button-outline button-danger" type="button" disabled={!notices.length} onClick={clearNotices}>Borrar avisos</button></div></div>{role === 'Organizador' && <section className="notice-compose"><div><p className="eyebrow">COMUNÍCATE CON TU COMUNIDAD</p><h2>Publicar aviso de una rifa</h2><p>El aviso será visible en esta sección para compradores y organizadores.</p></div>{createdPublicRaffles.length > 0 ? <form onSubmit={createRaffleNotice}><label className="form-field">Rifa relacionada<select required value={noticeRaffleId} onChange={(event) => setNoticeRaffleId(event.target.value)}><option value="" disabled>Selecciona una rifa pública</option>{createdPublicRaffles.map((raffle) => <option key={raffle.id} value={raffle.id}>{raffle.name}</option>)}</select></label><label className="form-field">Título del aviso<input required maxLength="100" value={noticeTitle} onChange={(event) => setNoticeTitle(event.target.value)} placeholder="Ej. Actualización de la rifa" /></label><label className="form-field">Mensaje<textarea required maxLength="500" rows="3" value={noticeDetail} onChange={(event) => setNoticeDetail(event.target.value)} placeholder="Comparte información importante con las personas participantes" /></label><button className="button button-dark" type="submit">Publicar aviso <span aria-hidden="true">↗</span></button></form> : <div className="notice-compose-empty"><p>Primero publica una rifa para poder asociarle un aviso.</p><button className="button button-outline" type="button" onClick={() => setActiveTab('Rifas')}>Ir a rifas</button></div>}</section>}<div className="notice-list">{notices.map((notice) => <NoticeItem key={notice.id} notice={notice} />)}</div></section>}
 
         {activeTab === 'Perfil' && <section className="module-page"><div className="module-heading"><div><p className="eyebrow">TU ESPACIO EN EVENTODOS</p><h1>{role === 'Comprador' ? 'Hola, Camila.' : 'Panel de organización'}</h1><p>{role === 'Comprador' ? 'Aquí comienza tu próxima historia.' : 'Administra tus eventos y conecta con tu comunidad.'}</p></div><div className="role-switch profile-role"><button className={role === 'Comprador' ? 'selected' : ''} onClick={() => changeRole('Comprador')} type="button">Comprador</button><button className={role === 'Organizador' ? 'selected' : ''} onClick={() => changeRole('Organizador')} type="button">Organizador</button></div></div>{role === 'Comprador' ? <div className="profile-layout"><div className="profile-stat"><span>ENTRADAS ACTIVAS</span><strong>{purchases.filter((purchase) => purchase.type === 'Evento' && purchase.date >= todayDate).length}</strong><button type="button" className="text-action" onClick={() => setActiveTab('Compras y Actividad')}>Ver mis entradas ↗</button></div><div className="profile-stat"><span>RIFAS EN LAS QUE PARTICIPAS</span><strong>{purchases.filter((purchase) => purchase.type === 'Rifa').length}</strong><button type="button" className="text-action" onClick={() => setActiveTab('Compras y Actividad')}>Ver mi actividad ↗</button></div><div className="profile-detail"><p className="eyebrow">DATOS DE LA CUENTA</p><h2>Camila Morales</h2><p>camila.morales@email.com</p><button className="button button-outline" type="button" onClick={() => showMessage('Pronto podrás editar tus datos.')}>Editar perfil</button></div></div> : <><div className="organizer-stats"><div><span>RIFAS PUBLICADAS</span><strong>{raffles.filter((raffle) => raffle.status === 'Pública').length}</strong></div><div><span>BOLETOS VENDIDOS</span><strong>{raffles.reduce((total, raffle) => total + raffle.sold, 0).toLocaleString('es-CL')}</strong></div><div><span>BORRADORES</span><strong>{raffles.filter((raffle) => raffle.status === 'Borrador').length}</strong></div><button className="button button-dark" type="button" onClick={() => setShowRaffleForm(true)}>＋ Crear rifa</button></div><div className="organizer-table"><div className="table-heading"><div><p className="eyebrow">TU ACTIVIDAD</p><h2>Rifas y publicaciones</h2></div><button className="text-action" type="button" onClick={() => setActiveTab('Rifas')}>Ver todas ↗</button></div>{raffles.map((raffle) => <RaffleRow key={raffle.id} raffle={raffle} onJoin={() => {}} isOrganizer />)}</div></>}</section>}
 
@@ -468,7 +598,7 @@ function App() {
 
       <footer className="footer"><a className="brand" href="#inicio" onClick={() => setActiveTab('Inicio')}><img className="brand-mark" src="/favicon.svg" alt="" /><span>EVENTODOS</span></a><p>Momentos que nos encuentran.</p><span>© 2026 EVENTODOS</span></footer>
 
-      {showRaffleForm && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowRaffleForm(false)}><section className="raffle-modal" role="dialog" aria-modal="true" aria-labelledby="raffle-modal-title"><div className="modal-heading"><div><p className="eyebrow">NUEVA PUBLICACIÓN</p><h2 id="raffle-modal-title">Crea tu rifa</h2></div><button className="close-button" type="button" aria-label="Cerrar" onClick={() => setShowRaffleForm(false)}>×</button></div><label className="form-field">Nombre de la rifa<input value={raffleName} onChange={(event) => setRaffleName(event.target.value)} placeholder="Ej. Una bici para tu próximo viaje" /></label><label className="form-field">Valor del boleto<input type="number" min="1" value={rafflePrice} onChange={(event) => setRafflePrice(event.target.value)} placeholder="$ 2.000" /></label><div className="status-explainer"><span className="status-dot public"/><div><strong>Pública</strong><p>Visible para todas las personas y disponible para participar.</p></div><span className="status-dot draft"/><div><strong>Borrador</strong><p>Guárdala y termínala cuando quieras.</p></div></div><div className="modal-actions"><button className="button button-outline" type="button" onClick={() => createRaffle('Borrador')}>Guardar borrador</button><button className="button button-dark" type="button" onClick={() => createRaffle('Pública')}>Publicar rifa <span aria-hidden="true">↗</span></button></div></section></div>}
+      {showRaffleForm && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowRaffleForm(false)}><section className="raffle-modal event-form-modal" role="dialog" aria-modal="true" aria-labelledby="raffle-modal-title"><div className="modal-heading"><div><p className="eyebrow">NUEVA PUBLICACIÓN</p><h2 id="raffle-modal-title">Crea tu rifa</h2></div><button className="close-button" type="button" aria-label="Cerrar" onClick={() => setShowRaffleForm(false)}>×</button></div><form onSubmit={(event) => { event.preventDefault(); createRaffle('Pública') }}><label className="form-field">Nombre de la rifa<input required maxLength="100" value={raffleName} onChange={(event) => setRaffleName(event.target.value)} placeholder="Ej. Una bici para tu próximo viaje" /></label><label className="form-field">Valor del boleto<input required type="number" min="1" step="1" value={rafflePrice} onChange={(event) => setRafflePrice(event.target.value)} placeholder="$ 2.000" /></label><div className="event-form-datetime"><label className="form-field">Fecha de inicio<input required type="date" min={todayDate} value={raffleStartDate} onChange={(event) => setRaffleStartDate(event.target.value)} /></label><label className="form-field">Fecha de cierre<input required type="date" min={raffleStartDate || todayDate} value={raffleEndDate} onChange={(event) => setRaffleEndDate(event.target.value)} /></label></div><label className="form-field">Cantidad de boletos<input required id="raffle-total" type="number" min="1" max={maxRaffleTickets} step="1" aria-describedby="raffle-total-help" value={raffleTotal} onChange={(event) => setRaffleTotal(event.target.value)} /><span id="raffle-total-help" className="form-field-help">Entre 1 y {maxRaffleTickets.toLocaleString('es-CL')} boletos.</span></label><label className="form-field raffle-image-field">Imagen de muestra<input type="file" accept="image/*" onChange={(event) => selectRaffleImage(event.target.files?.[0])} /><span>JPG, PNG o similar · máximo 5 MB. La imagen se optimiza para guardarse en la aplicación. Si no subes una, usaremos la imagen de muestra predeterminada.</span></label>{raffleImage && <div className="raffle-image-preview-wrap"><img className="raffle-image-preview" src={raffleImage} alt="Vista previa de la imagen de muestra de la rifa" /><button className="text-action" type="button" onClick={() => setRaffleImage('')}>Quitar imagen</button></div>}<div className="status-explainer"><span className="status-dot public"/><div><strong>Pública</strong><p>Visible para todas las personas y disponible para participar.</p></div><span className="status-dot draft"/><div><strong>Borrador</strong><p>Guárdala y termínala cuando quieras.</p></div></div><div className="modal-actions"><button className="button button-outline" type="button" onClick={() => createRaffle('Borrador')}>Guardar borrador</button><button className="button button-dark" type="submit">Publicar rifa <span aria-hidden="true">↗</span></button></div></form></section></div>}
       {activeTab === 'Perfil' && role === 'Organizador' && showEventForm && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowEventForm(false)}><section className="raffle-modal event-form-modal" role="dialog" aria-modal="true" aria-labelledby="event-form-title"><div className="modal-heading"><div><p className="eyebrow">PUBLICACIÓN DE EVENTO</p><h2 id="event-form-title">{editingEventId ? 'Editar evento' : 'Crear evento'}</h2></div><button className="close-button" type="button" aria-label="Cerrar formulario" onClick={() => setShowEventForm(false)}>×</button></div><form onSubmit={(event) => { event.preventDefault(); saveEvent('Pública') }}><label className="form-field">Nombre<input required maxLength="100" value={eventForm.name} onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))} placeholder="Ej. Festival de primavera" /></label><label className="form-field">Descripción<textarea required maxLength="1000" rows="3" value={eventForm.description} onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))} placeholder="Cuéntales qué podrán vivir en el evento" /></label><div className="event-form-datetime"><label className="form-field">Fecha<input required type="date" min={todayDate} value={eventForm.date} onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))} /></label><label className="form-field">Hora<input required type="time" value={eventForm.time} onChange={(event) => setEventForm((current) => ({ ...current, time: event.target.value }))} /></label></div><label className="form-field">Lugar<input required maxLength="160" value={eventForm.venue} onChange={(event) => setEventForm((current) => ({ ...current, venue: event.target.value }))} placeholder="Dirección o recinto" /></label><label className="form-field event-image-field">Imagen del evento<input type="file" accept="image/*" onChange={(event) => selectEventImage(event.target.files?.[0])} /><span>JPG, PNG o similar · máximo 2 MB</span></label>{eventForm.image && <img className="event-image-preview" src={eventForm.image} alt="Vista previa de la imagen del evento" />}<div className="status-explainer"><span className="status-dot public"/><div><strong>Pública</strong><p>El evento aparecerá en la agenda para todas las personas.</p></div><span className="status-dot draft"/><div><strong>Borrador</strong><p>Solo tú lo verás en tu perfil de organización.</p></div></div><div className="modal-actions"><button className="button button-outline" type="button" onClick={() => saveEvent('Borrador')}>Guardar como borrador</button><button className="button button-dark" type="submit">{editingEventId ? 'Guardar y publicar' : 'Publicar evento'} <span aria-hidden="true">↗</span></button></div></form></section></div>}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
@@ -477,12 +607,12 @@ function App() {
 
 function RaffleRow({ raffle, onJoin, isOrganizer }) {
   const progress = Math.min((raffle.sold / raffle.total) * 100, 100)
-  return <article className="raffle-row"><div className="raffle-icon">✳</div><div className="raffle-row-main"><div className="raffle-title-line"><h3>{raffle.name}</h3><span className={`status-label ${raffle.status === 'Pública' ? 'is-public' : 'is-draft'}`}>{raffle.status}</span></div><p>{raffle.organizer} · Cierra el {formatDate(raffle.date)}</p><div className="progress-track"><span style={{ width: `${progress}%` }} /></div><small>{raffle.sold} de {raffle.total} boletos</small></div><div className="raffle-row-end"><strong>{formatPrice(raffle.price)}</strong>{isOrganizer ? <span className="row-note">por boleto</span> : <button className="button button-outline" type="button" onClick={onJoin}>Participar</button>}</div></article>
+  return <article className="raffle-row"><div className="raffle-icon">✳</div><div className="raffle-row-main"><div className="raffle-title-line"><h3>{raffle.name}</h3><span className={`status-label ${raffle.status === 'Pública' ? 'is-public' : 'is-draft'}`}>{raffle.status}</span></div><p>{raffle.organizer}{raffle.startDate ? ` · Inicia el ${formatDate(raffle.startDate)}` : ''} · Cierra el {formatDate(raffle.date)}</p><div className="progress-track"><span style={{ width: `${progress}%` }} /></div><small>{raffle.sold.toLocaleString('es-CL')} de {raffle.total.toLocaleString('es-CL')} boletos</small></div><div className="raffle-row-end"><strong>{formatPrice(raffle.price)}</strong>{isOrganizer ? <span className="row-note">por boleto</span> : <button className="button button-outline" type="button" onClick={onJoin}>Participar</button>}</div></article>
 }
 
 function NoticeItem({ notice }) {
   if (!notice) return null
-  return <article className={`notice-item ${notice.unread ? 'unread' : ''}`}><span className={`notice-symbol ${notice.type}`}>{notice.type === 'ticket' ? '✓' : notice.type === 'update' ? '↻' : 'i'}</span><div><h3>{notice.title}{notice.unread && <span className="unread-dot" />}</h3><p>{notice.detail}</p></div><time>{notice.time}</time></article>
+  return <article className={`notice-item ${notice.unread ? 'unread' : ''}`}><span className={`notice-symbol ${notice.type}`}>{notice.type === 'ticket' ? '✓' : notice.type === 'update' ? '↻' : notice.type === 'raffle' ? '✳' : 'i'}</span><div><h3>{notice.title}{notice.unread && <span className="unread-dot" />}</h3><p>{notice.detail}</p>{notice.raffleName && <small className="notice-raffle-link">Rifa: {notice.raffleName}</small>}</div><time>{notice.time}</time></article>
 }
 
 export default App

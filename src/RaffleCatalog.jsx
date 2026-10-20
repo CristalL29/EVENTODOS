@@ -1,9 +1,12 @@
 import { useState } from 'react'
 
 const formatPrice = (amount) => `$${amount.toLocaleString('es-CL')}`
-const formatDate = (value) => new Intl.DateTimeFormat('es-CL', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`))
+const formatDate = (value) => value
+  ? new Intl.DateTimeFormat('es-CL', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`))
+  : 'Fecha por confirmar'
+const currentDate = new Date().toISOString().slice(0, 10)
 
-export default function RaffleCatalog({ raffles, isOrganizer, onParticipate, onCreate }) {
+export default function RaffleCatalog({ raffles, isOrganizer, onParticipate, onCreate, onClearPublished }) {
   const [search, setSearch] = useState('')
   const [selectedRaffleId, setSelectedRaffleId] = useState(null)
   const [quantity, setQuantity] = useState(1)
@@ -15,6 +18,9 @@ export default function RaffleCatalog({ raffles, isOrganizer, onParticipate, onC
     .sort((first, second) => second.sold - first.sold)
   const selectedRaffle = raffles.find((raffle) => raffle.id === selectedRaffleId)
   const availableTickets = selectedRaffle ? Math.max(selectedRaffle.total - selectedRaffle.sold, 0) : 0
+  const hasPublishedRaffles = raffles.some((raffle) => raffle.status === 'Pública')
+  const hasNotStarted = selectedRaffle?.startDate && currentDate < selectedRaffle.startDate
+  const hasEnded = selectedRaffle?.date && currentDate > selectedRaffle.date
 
   function openRaffle(raffle) {
     setSelectedRaffleId(raffle.id)
@@ -39,7 +45,10 @@ export default function RaffleCatalog({ raffles, isOrganizer, onParticipate, onC
           <h1>Rifas con propósito</h1>
           <p>Explora premios ficticios y conoce las causas que apoya cada rifa.</p>
         </div>
-        {isOrganizer && <button className="button button-dark" type="button" onClick={onCreate}>＋ Crear rifa</button>}
+        {isOrganizer && <div className="raffle-header-actions">
+          <button className="button button-outline button-danger" type="button" disabled={!hasPublishedRaffles} onClick={onClearPublished}>Borrar rifas publicadas</button>
+          <button className="button button-dark" type="button" onClick={onCreate}>＋ Crear rifa</button>
+        </div>}
       </div>
 
       <p className="raffle-demo-notice" role="note">Modo demostración: todas las rifas, premios, precios y participaciones son ficticios. No se realizan pagos ni transacciones reales.</p>
@@ -63,7 +72,8 @@ export default function RaffleCatalog({ raffles, isOrganizer, onParticipate, onC
               </div>
               <div className="raffle-detail-facts">
                 <p><span>Valor por boleto</span><strong>{formatPrice(selectedRaffle.price)} <small>ficticios</small></strong></p>
-                <p><span>Boletos disponibles</span><strong>{availableTickets} de {selectedRaffle.total}</strong></p>
+                <p><span>Boletos disponibles</span><strong>{availableTickets.toLocaleString('es-CL')} de {selectedRaffle.total.toLocaleString('es-CL')}</strong></p>
+                {selectedRaffle.startDate && <p><span>Fecha de inicio</span><strong>{formatDate(selectedRaffle.startDate)}</strong></p>}
                 <p><span>Fecha de cierre</span><strong>{formatDate(selectedRaffle.date)}</strong></p>
               </div>
               {!isOrganizer && selectedRaffle.status === 'Pública' && (
@@ -76,14 +86,16 @@ export default function RaffleCatalog({ raffles, isOrganizer, onParticipate, onC
                       min="1"
                       max={availableTickets}
                       value={quantity}
-                      disabled={availableTickets === 0}
+                      disabled={availableTickets === 0 || hasNotStarted || hasEnded}
                       onChange={(event) => setQuantity(Math.min(Math.max(Number(event.target.value) || 1, 1), availableTickets || 1))}
                     />
                     <span>{availableTickets} disponibles</span>
                   </div>
                   <div className="raffle-total"><span>Total ficticio</span><strong>{formatPrice(quantity * selectedRaffle.price)}</strong></div>
-                  <button className="button button-dark" type="button" disabled={availableTickets === 0} onClick={() => setStep('summary')}>Continuar <span aria-hidden="true">↗</span></button>
+                  <button className="button button-dark" type="button" disabled={availableTickets === 0 || hasNotStarted || hasEnded} onClick={() => setStep('summary')}>Continuar <span aria-hidden="true">↗</span></button>
                   {availableTickets === 0 && <p className="raffle-sold-out" role="status">Esta rifa ya no tiene boletos disponibles.</p>}
+                  {hasNotStarted && <p className="raffle-sold-out" role="status">La participación estará disponible desde {formatDate(selectedRaffle.startDate)}.</p>}
+                  {hasEnded && <p className="raffle-sold-out" role="status">El plazo para participar en esta rifa ya terminó.</p>}
                 </div>
               )}
               {isOrganizer && <p className="raffle-organizer-note">Vista de organización: las participaciones solo están disponibles para compradores.</p>}

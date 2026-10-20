@@ -5,6 +5,36 @@ const formatLongDate = (value) => value
   ? new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`))
   : 'Fecha por confirmar'
 
+function getEventStatus(event) {
+  if (!event.date || Number.isNaN(new Date(`${event.date}T00:00:00`).getTime())) return 'Próximamente'
+
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  if (event.date > today) return 'Próximamente'
+  if (event.date < today) return 'Finalizado'
+
+  const startTime = new Date(`${event.date}T${event.time || '00:00'}:00`)
+  return Number.isNaN(startTime.getTime()) || startTime > now ? 'Próximamente' : 'En curso'
+}
+
+function EventOrganizerInfo({ event, onClose }) {
+  return (
+    <div className="event-modal-backdrop" role="presentation" onMouseDown={(clickEvent) => clickEvent.target === clickEvent.currentTarget && onClose()}>
+      <section className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-organizer-title">
+        <div className="event-modal-heading">
+          <div><p className="eyebrow">DATOS FICTICIOS DEL ORGANIZADOR</p><h2 id="event-organizer-title">{event.organizer || 'Organizador de muestra'}</h2></div>
+          <button className="close-button" type="button" aria-label="Cerrar datos del organizador" onClick={onClose}>×</button>
+        </div>
+        <p className="contact-detail"><span>Descripción</span><strong>{event.organizerDescription || 'Organizador de demostración de EVENTODOS.'}</strong></p>
+        <p className="contact-detail"><span>Correo electrónico</span><strong>{event.contact?.email || 'equipo@eventodos.example'}</strong></p>
+        <p className="contact-detail"><span>Teléfono</span><strong>{event.contact?.phone || '+56 9 0000 0000'}</strong></p>
+        <p className="modal-disclaimer">Estos datos son de muestra y no corresponden a una persona o entidad real.</p>
+        <button type="button" className="button button-dark" onClick={onClose}>Cerrar</button>
+      </section>
+    </div>
+  )
+}
+
 export function EventCatalog({ events, locations, search, onSearchChange, dateFilter, onDateFilterChange, categoryFilter, onCategoryFilterChange, locationFilter, onLocationFilterChange, sortOrder, onSortChange, status, onRetry, onView }) {
   function resetFilters() {
     onSearchChange('')
@@ -99,15 +129,21 @@ export function EventDetails({ event, onBack, onPurchase }) {
 }
 
 export function EventCard({ event, onView }) {
+  const [showOrganizerInfo, setShowOrganizerInfo] = useState(false)
+  const eventStatus = getEventStatus(event)
+  const eventStatusClass = eventStatus === 'En curso' ? 'ongoing' : eventStatus === 'Finalizado' ? 'finished' : 'upcoming'
+
   return (
-    <article className="event-card">
+    <article className={`event-card ${showOrganizerInfo ? 'organizer-info-open' : ''}`}>
       <button className="event-card-image" type="button" onClick={() => onView(event)} aria-label={`Ver detalles de ${event.name}`}>
         {event.images?.[0] && <img src={event.images[0].src} alt={event.images[0].alt} loading="lazy" />}
         <span className="event-image-shade" /><span className="event-image-category">{event.filterCategory || 'Evento'}</span>
         <span className="event-date"><strong>{new Intl.DateTimeFormat('es-CL', { day: '2-digit' }).format(new Date(`${event.date}T12:00:00`))}</strong><small>{new Intl.DateTimeFormat('es-CL', { month: 'short' }).format(new Date(`${event.date}T12:00:00`))}</small></span>
+        <span className={`event-status-badge ${eventStatusClass}`}>{eventStatus}</span>
         <span className="event-image-mark">{event.mark}</span>
       </button>
-      <div className="event-card-body"><p className="eyebrow">{event.category}</p><h3>{event.name}</h3><p className="event-card-description">{event.description || 'Descripción por confirmar.'}</p><div className="event-card-meta"><span>{formatLongDate(event.date)} · {event.time || 'Hora por confirmar'}</span><span>{event.venue || 'Lugar por confirmar'} · {event.city || 'Ubicación por confirmar'}</span><span>Organiza {event.organizer || 'por confirmar'}</span></div><div className="event-card-foot"><div><span>Desde</span><strong>{formatPrice(event.price)} <small>ficticios</small></strong></div><button className="button button-outline event-details-button" type="button" onClick={() => onView(event)}>Ver detalles <span aria-hidden="true">↗</span></button></div></div>
+      <div className="event-card-body"><p className="eyebrow">{event.category}</p><h3>{event.name}</h3><p className="event-card-description">{event.description || 'Descripción por confirmar.'}</p><div className="event-card-meta"><span>{formatLongDate(event.date)} · {event.time || 'Hora por confirmar'}</span><span>{event.venue || 'Lugar por confirmar'} · {event.city || 'Ubicación por confirmar'}</span><span>Organiza {event.organizer || 'por confirmar'}</span></div><div className="event-card-foot"><div><span>Desde</span><strong>{formatPrice(event.price)} <small>ficticios</small></strong></div><div className="event-card-actions"><button className="button button-outline event-details-button" type="button" onClick={() => setShowOrganizerInfo(true)}>Organizador</button><button className="button button-dark event-details-button" type="button" onClick={() => onView(event)}>Ver detalles <span aria-hidden="true">↗</span></button></div></div></div>
+      {showOrganizerInfo && <EventOrganizerInfo event={event} onClose={() => setShowOrganizerInfo(false)} />}
     </article>
   )
 }
