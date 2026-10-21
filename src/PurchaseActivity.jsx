@@ -54,7 +54,7 @@ function DigitalTicket({ ticket, onClose, autoGeneratePdf }) {
           <button className="close-button" type="button" aria-label="Cerrar boleto" onClick={onClose}>×</button>
         </div>
         <div className="ticket-print-view">
-          <div className="digital-ticket-brand"><img src="/favicon.svg" alt="" /><span>EVENTODOS</span></div>
+          <div className="digital-ticket-brand"><img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" /><span>EVENTODOS</span></div>
           <p className="eyebrow">{ticket.type} · {ticket.ticketType}</p>
           <h2 id="digital-ticket-title">{ticket.title}</h2>
           <p className="digital-ticket-date">{formatDate(ticket.date)}{ticket.venue ? ` · ${ticket.venue}` : ''}</p>
